@@ -53,7 +53,7 @@ echo "Deployment target: $IOS_DEPLOYMENT_TARGET"
 #
 
 git_clone SDL             "https://github.com/libsdl-org/SDL"             main || { echo "Failed to clone SDL"             >&2; exit 1; }
-#git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main || { echo "Failed to clone SDL_image"       >&2; exit 1; }
+git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main || { echo "Failed to clone SDL_image"       >&2; exit 1; }
 #git_clone SDL_mixer       "https://github.com/libsdl-org/SDL_mixer"       main || { echo "Failed to clone SDL_mixer"       >&2; exit 1; }
 #git_clone SDL_ttf         "https://github.com/libsdl-org/SDL_ttf"         main || { echo "Failed to clone SDL_ttf"         >&2; exit 1; }
 #git_clone SDL_rtf         "https://github.com/libsdl-org/SDL_rtf"         main || { echo "Failed to clone SDL_rtf"         >&2; exit 1; }
@@ -105,56 +105,53 @@ cmake \
 cmake \
     --install "$BUILD/SDL"
 
+#
+# SDL_image
+#
+
+source "$SOURCE/SDL_image/external/download.sh"
+cmake \
+	"${CMAKE_COMMON_ARGS[@]}" \
+	-S "$SOURCE/SDL_image" \
+	-B "$BUILD/SDL_image" \
+	-DSDL3_ROOT="$OUTPUT"      \
+	-DSDLIMAGE_STRICT=ON       \
+	-DSDLIMAGE_DEPS_SHARED=OFF \
+	-DSDLIMAGE_VENDORED=ON     \
+	-DSDLIMAGE_WERROR=OFF      \
+	-DSDLIMAGE_STRICT=ON       \
+	-DSDLIMAGE_SAMPLES=OFF     \
+	-DSDLIMAGE_TESTS=OFF       \
+	-DSDLIMAGE_BACKEND_STB=OFF     \
+	-DSDLIMAGE_BACKEND_WIC=OFF     \
+	-DSDLIMAGE_BACKEND_IMAGEIO=OFF \
+	-DSDLIMAGE_AVIF=ON         \
+	-DSDLIMAGE_BMP=ON          \
+	-DSDLIMAGE_GIF=ON          \
+	-DSDLIMAGE_JPG=ON          \
+	-DSDLIMAGE_JXL=ON          \
+	-DSDLIMAGE_LBM=ON          \
+	-DSDLIMAGE_PCX=ON          \
+	-DSDLIMAGE_PNG=ON          \
+	-DSDLIMAGE_PNM=ON          \
+	-DSDLIMAGE_QOI=ON          \
+	-DSDLIMAGE_SVG=ON          \
+	-DSDLIMAGE_TGA=ON          \
+	-DSDLIMAGE_TIF=ON          \
+	-DSDLIMAGE_WEBP=ON         \
+	-DSDLIMAGE_XCF=ON          \
+	-DSDLIMAGE_XPM=ON          \
+	-DSDLIMAGE_XV=ON           \
+	-DSDLIMAGE_AVIF_SAVE=ON    \
+	-DSDLIMAGE_JPG_SAVE=ON     \
+	-DSDLIMAGE_PNG_SAVE=ON
+cmake \
+    --build "$BUILD/SDL_image" \
+    --parallel
+cmake \
+    --install "$BUILD/SDL_image"
+
 : '
-rem
-rem SDL_image
-rem dependencies: avif, libjxl, tiff, libjpeg-turbo, libpng, libwebp
-rem
-
-set SDL3_IMAGE_LINK_FLAGS=-LIBPATH:%DEPEND:\=/%/lib brotlicommon.lib brotlidec.lib hwy.lib libsharpyuv.lib yuv.lib libdav1d.a aom.lib
-
-cmake.exe %CMAKE_COMMON_ARGS%                            ^
-  -S %SOURCE%\SDL_image                                  ^
-  -B %BUILD%\SDL_image                                   ^
-  -D CMAKE_INSTALL_PREFIX=%OUTPUT%                       ^
-  -D CMAKE_PREFIX_PATH=%DEPEND%                          ^
-  -D CMAKE_C_FLAGS=-DJXL_STATIC_DEFINE                   ^
-  -D CMAKE_SHARED_LINKER_FLAGS="%SDL3_IMAGE_LINK_FLAGS%" ^
-  -D BUILD_SHARED_LIBS=ON                                ^
-  -D SDL3_ROOT=%OUTPUT%                                  ^
-  -D SDLIMAGE_STRICT=ON                                  ^
-  -D SDLIMAGE_DEPS_SHARED=OFF                            ^
-  -D SDLIMAGE_VENDORED=OFF                               ^
-  -D SDLIMAGE_WERROR=OFF                                 ^
-  -D SDLIMAGE_STRICT=ON                                  ^
-  -D SDLIMAGE_SAMPLES=OFF                                ^
-  -D SDLIMAGE_TESTS=OFF                                  ^
-  -D SDLIMAGE_BACKEND_STB=OFF                            ^
-  -D SDLIMAGE_BACKEND_WIC=OFF                            ^
-  -D SDLIMAGE_BACKEND_IMAGEIO=OFF                        ^
-  -D SDLIMAGE_AVIF=ON                                    ^
-  -D SDLIMAGE_BMP=ON                                     ^
-  -D SDLIMAGE_GIF=ON                                     ^
-  -D SDLIMAGE_JPG=ON                                     ^
-  -D SDLIMAGE_JXL=ON                                     ^
-  -D SDLIMAGE_LBM=ON                                     ^
-  -D SDLIMAGE_PCX=ON                                     ^
-  -D SDLIMAGE_PNG=ON                                     ^
-  -D SDLIMAGE_PNM=ON                                     ^
-  -D SDLIMAGE_QOI=ON                                     ^
-  -D SDLIMAGE_SVG=ON                                     ^
-  -D SDLIMAGE_TGA=ON                                     ^
-  -D SDLIMAGE_TIF=ON                                     ^
-  -D SDLIMAGE_WEBP=ON                                    ^
-  -D SDLIMAGE_XCF=ON                                     ^
-  -D SDLIMAGE_XPM=ON                                     ^
-  -D SDLIMAGE_XV=ON                                      ^
-  -D SDLIMAGE_AVIF_SAVE=ON                               ^
-  -D SDLIMAGE_JPG_SAVE=ON                                ^
-  -D SDLIMAGE_PNG_SAVE=ON                                ^
-  || exit /b 1
-ninja.exe -C %BUILD%\SDL_image install || exit /b 1
-
 rem
 rem SDL_mixer
 rem dependencies: libgme, libxmp, mpg123, flac, opusfile, vorbis, wavpack
@@ -356,7 +353,7 @@ popd
 #
 
 SDL_COMMIT="$(git -C "$SOURCE/SDL" rev-parse HEAD)"
-#SDL_IMAGE_COMMIT=$(<"$SOURCE/SDL_image/.git/refs/heads/main")
+SDL_IMAGE_COMMIT=$(<"$SOURCE/SDL_image/.git/refs/heads/main")
 #SDL_MIXER_COMMIT=$(<"$SOURCE/SDL_mixer/.git/refs/heads/main")
 #SDL_TTF_COMMIT=$(<"$SOURCE/SDL_ttf/.git/refs/heads/main")
 #SDL_RTF_COMMIT=$(<"$SOURCE/SDL_rtf/.git/refs/heads/main")
@@ -367,7 +364,7 @@ SDL_COMMIT="$(git -C "$SOURCE/SDL" rev-parse HEAD)"
 
 {
     printf "SDL             %s\n" "$SDL_COMMIT"
-    #printf "SDL_image       %s\n" "$SDL_IMAGE_COMMIT"
+    printf "SDL_image       %s\n" "$SDL_IMAGE_COMMIT"
     #printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
     #printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
     #printf "SDL_rtf         %s\n" "$SDL_RTF_COMMIT"
@@ -378,10 +375,10 @@ SDL_COMMIT="$(git -C "$SOURCE/SDL" rev-parse HEAD)"
 } > "$OUTPUT/commits.txt"
 
 echo Moving headers
-#for F in SDL3_mixer SDL3_image SDL3_net SDL3_sound SDL3_rtf SDL3_ttf SDL3_shadercross; do
-#    mv "$OUTPUT/include/$F"/*.h "$OUTPUT/include/SDL3/" 2>/dev/null
-#    rm -rf "$OUTPUT/include/$F" 2>/dev/null
-#done
+for F in SDL3_mixer SDL3_image SDL3_net SDL3_sound SDL3_rtf SDL3_ttf SDL3_shadercross; do
+    mv "$OUTPUT/include/$F"/*.h "$OUTPUT/include/SDL3/" 2>/dev/null
+    rm -rf "$OUTPUT/include/$F" 2>/dev/null
+done
 echo Moved headers
 
 #
@@ -404,7 +401,7 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
     {
         echo "OUTPUT_DATE=$OUTPUT_DATE"
         echo "SDL_COMMIT=$SDL_COMMIT"
-        #echo "SDL_IMAGE_COMMIT=$SDL_IMAGE_COMMIT"
+        echo "SDL_IMAGE_COMMIT=$SDL_IMAGE_COMMIT"
         #echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
         #echo "SDL_TTF_COMMIT=$SDL_TTF_COMMIT"
         #echo "SDL_RTF_COMMIT=$SDL_RTF_COMMIT"
