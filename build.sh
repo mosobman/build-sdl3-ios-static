@@ -115,6 +115,7 @@ cmake \
 	-S "$SOURCE/SDL_image" \
 	-B "$BUILD/SDL_image" \
 	-DSDL3_ROOT="$OUTPUT"      \
+	-DSDL3_DIR="$BUILD/SDL"    \
 	-DSDLIMAGE_STRICT=ON       \
 	-DSDLIMAGE_DEPS_SHARED=OFF \
 	-DSDLIMAGE_VENDORED=ON     \
