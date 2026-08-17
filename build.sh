@@ -109,7 +109,7 @@ cmake \
 # SDL_image
 #
 
-source "$SOURCE/SDL_image/external/download.sh"
+#source "$SOURCE/SDL_image/external/download.sh"
 cmake \
 	"${CMAKE_COMMON_ARGS[@]}" \
 	-S "$SOURCE/SDL_image" \
