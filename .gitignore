@@ -3,3 +3,4 @@ depend-*
 download
 source
 SDL3-*
+!.github/workflows/build-sdl3-ios-static.yml

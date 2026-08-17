@@ -1,0 +1,86 @@
+
+name: build-sdl3-ios-static
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        arch: [iOS]
+
+    outputs:
+      OUTPUT_DATE:            ${{ steps.build.outputs.OUTPUT_DATE }}
+      SDL_COMMIT:             ${{ steps.build.outputs.SDL_COMMIT }}
+#      SDL_IMAGE_COMMIT:       ${{ steps.build.outputs.SDL_IMAGE_COMMIT }}
+#      SDL_MIXER_COMMIT:       ${{ steps.build.outputs.SDL_MIXER_COMMIT }}
+#      SDL_TTF_COMMIT:         ${{ steps.build.outputs.SDL_TTF_COMMIT }}
+#      SDL_RTF_COMMIT:         ${{ steps.build.outputs.SDL_RTF_COMMIT }}
+#      SDL_NET_COMMIT:         ${{ steps.build.outputs.SDL_NET_COMMIT }}
+#      SDL_SOUND_COMMIT:       ${{ steps.build.outputs.SDL_SOUND_COMMIT }}
+#      SDL_SHADERCROSS_COMMIT: ${{ steps.build.outputs.SDL_SHADERCROSS_COMMIT }}
+#      SDL2_COMPAT_COMMIT:     ${{ steps.build.outputs.SDL2_COMPAT_COMMIT }}
+
+    steps:
+
+      - name: checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Xcode version
+        uses: maxim-lobanov/setup-xcode@v1.7.0
+        with:
+            xcode-version: "16.1"
+
+      - name: build
+        id: build
+        run: bash build.sh ${{ matrix.arch }}
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: SDL3-${{ matrix.arch }}-${{ steps.build.outputs.OUTPUT_DATE }}
+          path: SDL3-${{ matrix.arch }}-${{ steps.build.outputs.OUTPUT_DATE }}.zip
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: build
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+
+      - name: create or update release
+        run: |
+          echo '[SDL commit](https://github.com/libsdl-org/SDL/commit/${{ needs.build.outputs.SDL_COMMIT }})'                                     >>notes.txt
+
+          if gh release view ${{ needs.build.outputs.OUTPUT_DATE }} -R "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit ${{ needs.build.outputs.OUTPUT_DATE }} -R "${GITHUB_REPOSITORY}" -t '${{ needs.build.outputs.OUTPUT_DATE }}' -F notes.txt
+          else
+            gh release create ${{ needs.build.outputs.OUTPUT_DATE }} -R "${GITHUB_REPOSITORY}" -t '${{ needs.build.outputs.OUTPUT_DATE }}' -F notes.txt
+          fi
+#          echo '[SDL_image commit](https://github.com/libsdl-org/SDL_image/commit/${{ needs.build.outputs.SDL_IMAGE_COMMIT }})'                   >>notes.txt
+#          echo '[SDL_mixer commit](https://github.com/libsdl-org/SDL_mixer/commit/${{ needs.build.outputs.SDL_MIXER_COMMIT }})'                   >>notes.txt
+#          echo '[SDL_ttf commit](https://github.com/libsdl-org/SDL_ttf/commit/${{ needs.build.outputs.SDL_TTF_COMMIT }})'                         >>notes.txt
+#          echo '[SDL_rtf commit](https://github.com/libsdl-org/SDL_rtf/commit/${{ needs.build.outputs.SDL_RTF_COMMIT }})'                         >>notes.txt
+#          echo '[SDL_net commit](https://github.com/libsdl-org/SDL_net/commit/${{ needs.build.outputs.SDL_NET_COMMIT }})'                         >>notes.txt
+#          echo '[SDL_sound commit](https://github.com/icculus/SDL_sound/commit/${{ needs.build.outputs.SDL_SOUND_COMMIT }})'                      >>notes.txt
+#          echo '[SDL_shadercross commit](https://github.com/libsdl-org/SDL_shadercross/commit/${{ needs.build.outputs.SDL_SHADERCROSS_COMMIT }})' >>notes.txt
+#          echo '[SDL2_compat commit](https://github.com/libsdl-org/sdl2-compat/commit/${{ needs.build.outputs.SDL2_COMPAT_COMMIT }})'             >>notes.txt
+
+      - name: get artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: SDL3-*-${{ needs.build.outputs.OUTPUT_DATE }}
+          merge-multiple: true
+
+      - name: upload artifacts
+        run: gh release upload '${{ needs.build.outputs.OUTPUT_DATE }}' SDL3-*-${{ needs.build.outputs.OUTPUT_DATE }}.zip -R "${GITHUB_REPOSITORY}" --clobber

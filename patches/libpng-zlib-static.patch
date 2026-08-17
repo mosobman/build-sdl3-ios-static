@@ -1,7 +1,0 @@
-diff --git a/lib/cmake/PNG/PNGTargets.cmake b/lib/cmake/PNG/PNGTargets.cmake
-index 287ee02..2740ee4 100644
---- a/lib/cmake/PNG/PNGTargets.cmake
-+++ b/lib/cmake/PNG/PNGTargets.cmake
-@@ -63 +63 @@ set_target_properties(PNG::png_static PROPERTIES
--  INTERFACE_LINK_LIBRARIES "ZLIB::ZLIB"
-+  INTERFACE_LINK_LIBRARIES "ZLIB::ZLIBSTATIC"
