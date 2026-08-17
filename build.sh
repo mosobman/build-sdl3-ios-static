@@ -3,9 +3,21 @@ set -euo pipefail
 
 TARGET_PLATFORM="$1"
 
+abspath() {
+    realpath -m -- "$1"
+}
+
+SCRIPT_DIR="$(abspath "$(dirname "$0")")"
+
+OUTPUT="$(abspath "$SCRIPT_DIR/SDL3-${TARGET_PLATFORM}")"
+SOURCE="$(abspath "$SCRIPT_DIR/sources")"
+BUILD="$(abspath "$SCRIPT_DIR/builds")"
 OUTPUT="$(dirname "$0")/SDL3-${TARGET_PLATFORM}"
 SOURCE="$(dirname "$0")/sources"
 BUILD="$(dirname "$0")/builds"
+rm -rf "$OUTPUT"
+rm -rf "$SOURCE"
+rm -rf "$BUILD"
 mkdir -p "$OUTPUT" || { echo "cannot create output path" >&2; exit 1; }
 mkdir -p "$SOURCE" || { echo "cannot create source path" >&2; exit 1; }
 mkdir -p "$BUILD"  || { echo "cannot create build path"  >&2; exit 1; }
@@ -85,9 +97,9 @@ CMAKE_COMMON_ARGS=(
   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
   -DCMAKE_INSTALL_PREFIX="$OUTPUT"
-  -DCMAKE_PREFIX_PATH="$OUTPUT"
   -DSDL3_ROOT="$OUTPUT"
   -DSDL3_DIR="$OUTPUT/lib/cmake/SDL3"
+  -DCMAKE_PREFIX_PATH="$OUTPUT"
 )
 
 #
