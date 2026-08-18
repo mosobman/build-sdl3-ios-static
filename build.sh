@@ -52,6 +52,7 @@ CC="$(xcrun --sdk iphoneos --find clang)"
 CXX="$(xcrun --sdk iphoneos --find clang++)"
 OBJCC="$(xcrun --sdk iphoneos --find clang)"
 OBJCXX="$(xcrun --sdk iphoneos --find clang++)"
+CLANG_VER="$($(CC) --version)"
 
 IOS_DEPLOYMENT_TARGET="${IOS_DEPLOYMENT_TARGET:-15.0}"
 IOS_ARCH="${IOS_ARCH:-arm64}"
@@ -59,6 +60,7 @@ IOS_ARCH="${IOS_ARCH:-arm64}"
 echo "SDK: $SDK"
 echo "Architecture: $IOS_ARCH"
 echo "Deployment target: $IOS_DEPLOYMENT_TARGET"
+echo "Compiler Version: $CLANG_VER"
 
 #
 # Downloading & Unpacking
@@ -461,3 +463,6 @@ fi
 #
 # done!
 #
+
+mkdir -p "$OUTPUT/compiler-rt"
+cp -av "$(clang -print-resource-dir)/lib/darwin/"* "$OUTPUT/compiler-rt/"
