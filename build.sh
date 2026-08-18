@@ -101,6 +101,11 @@ CMAKE_COMMON_ARGS=(
   -DCMAKE_OBJC_COMPILER="$OBJCC"
   -DCMAKE_OBJCXX_COMPILER="$OBJCXX"
 
+  -DCMAKE_C_FLAGS="-fno-objc-msgsend-selector-stubs"
+  -DCMAKE_CXX_FLAGS="-fno-objc-msgsend-selector-stubs"
+  -DCMAKE_OBJC_FLAGS="-fno-objc-msgsend-selector-stubs"
+  -DCMAKE_OBJCXX_FLAGS="-fno-objc-msgsend-selector-stubs"
+
   -DCMAKE_POLICY_DEFAULT_CMP0074=NEW
   -DCMAKE_POLICY_DEFAULT_CMP0092=NEW
   -DCMAKE_POLICY_DEFAULT_CMP0111=NEW
