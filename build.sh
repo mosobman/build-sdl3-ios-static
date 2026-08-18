@@ -3,24 +3,20 @@ set -euo pipefail
 
 TARGET_PLATFORM="$1"
 
-abspath() {
-    realpath -m -- "$1"
-}
+SCRIPT_DIR="$(realpath "$(dirname "$0")")"
 
-SCRIPT_DIR="$(abspath "$(dirname "$0")")"
-
-OUTPUT="$(abspath "$SCRIPT_DIR/SDL3-${TARGET_PLATFORM}")"
-SOURCE="$(abspath "$SCRIPT_DIR/sources")"
-BUILD="$(abspath "$SCRIPT_DIR/builds")"
-OUTPUT="$(dirname "$0")/SDL3-${TARGET_PLATFORM}"
-SOURCE="$(dirname "$0")/sources"
-BUILD="$(dirname "$0")/builds"
+OUTPUT="$SCRIPT_DIR/SDL3-${TARGET_PLATFORM}"
+SOURCE="$SCRIPT_DIR/sources"
+BUILD="$SCRIPT_DIR/builds"
 rm -rf "$OUTPUT"
 rm -rf "$SOURCE"
 rm -rf "$BUILD"
 mkdir -p "$OUTPUT" || { echo "cannot create output path" >&2; exit 1; }
 mkdir -p "$SOURCE" || { echo "cannot create source path" >&2; exit 1; }
 mkdir -p "$BUILD"  || { echo "cannot create build path"  >&2; exit 1; }
+echo "OUTPUT: $OUTPUT"
+echo "SOURCE: $SOURCE"
+echo "BUILD: $BUILD"
 
 git_clone() {
 	if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
@@ -52,6 +48,10 @@ command -v cmake >/dev/null || { echo "cmake not found" >&2; exit 1; }
 command -v xcrun >/dev/null || { echo "xcrun not found" >&2; exit 1; }
 
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+CC="$(xcrun --sdk iphoneos --find clang)"
+CXX="$(xcrun --sdk iphoneos --find clang++)"
+OBJCC="$(xcrun --sdk iphoneos --find clang)"
+OBJCXX="$(xcrun --sdk iphoneos --find clang++)"
 
 IOS_DEPLOYMENT_TARGET="${IOS_DEPLOYMENT_TARGET:-15.0}"
 IOS_ARCH="${IOS_ARCH:-arm64}"
@@ -66,8 +66,8 @@ echo "Deployment target: $IOS_DEPLOYMENT_TARGET"
 
 git_clone SDL             "https://github.com/libsdl-org/SDL"             main || { echo "Failed to clone SDL"             >&2; exit 1; }
 git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main || { echo "Failed to clone SDL_image"       >&2; exit 1; }
-#git_clone SDL_mixer       "https://github.com/libsdl-org/SDL_mixer"       main || { echo "Failed to clone SDL_mixer"       >&2; exit 1; }
-#git_clone SDL_ttf         "https://github.com/libsdl-org/SDL_ttf"         main || { echo "Failed to clone SDL_ttf"         >&2; exit 1; }
+git_clone SDL_mixer       "https://github.com/libsdl-org/SDL_mixer"       main || { echo "Failed to clone SDL_mixer"       >&2; exit 1; }
+git_clone SDL_ttf         "https://github.com/libsdl-org/SDL_ttf"         main || { echo "Failed to clone SDL_ttf"         >&2; exit 1; }
 #git_clone SDL_rtf         "https://github.com/libsdl-org/SDL_rtf"         main || { echo "Failed to clone SDL_rtf"         >&2; exit 1; }
 #git_clone SDL_net         "https://github.com/libsdl-org/SDL_net"         main || { echo "Failed to clone SDL_net"         >&2; exit 1; }
 #git_clone SDL_sound       "https://github.com/icculus/SDL_sound"          main || { echo "Failed to clone SDL_sound"       >&2; exit 1; }
@@ -79,27 +79,55 @@ git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main |
 #call git -C source\SDL_shadercross submodule foreach git reset --quiet --hard HEAD || exit /b 1
 
 #
+# Apply patches
+#
+
+echo Applying patches
+#git -C "$SOURCE/SDL_mixer" apply -p1 "$SCRIPT_DIR/patches/SDL_mixer.patch"
+git -C "$SOURCE/SDL_ttf" apply -p1 "$SCRIPT_DIR/patches/SDL_ttf.patch"
+echo Applied patches
+
+#
 # Build Flags
 #
 
 CMAKE_COMMON_ARGS=(
+  -Wno-dev
   -G Ninja
   -DCMAKE_BUILD_TYPE=Release
+
+  -DCMAKE_C_COMPILER="$CC"
+  -DCMAKE_CXX_COMPILER="$CXX"
+  -DCMAKE_OBJC_COMPILER="$OBJCC"
+  -DCMAKE_OBJCXX_COMPILER="$OBJCXX"
+
+  -DCMAKE_POLICY_DEFAULT_CMP0074=NEW
+  -DCMAKE_POLICY_DEFAULT_CMP0092=NEW
+  -DCMAKE_POLICY_DEFAULT_CMP0111=NEW
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+  -DCMAKE_INSTALL_BUNDLEDIR="$BUILD/bin"
+  -DCMAKE_INSTALL_FRAMEWORKDIR="$BUILD/Frameworks"
+  -DCMAKE_FRAMEWORK=OFF
 
   -DCMAKE_SYSTEM_NAME="$TARGET_PLATFORM"
   -DCMAKE_SYSTEM_PROCESSOR="$IOS_ARCH"
   -DCMAKE_OSX_SYSROOT="$SDK"
   -DCMAKE_OSX_ARCHITECTURES="$IOS_ARCH"
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_DEPLOYMENT_TARGET"
+  -DCMAKE_MACOSX_BUNDLE=OFF
 
   -DBUILD_SHARED_LIBS=OFF
   -DBUILD_STATIC_LIBS=ON
   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-  -DCMAKE_INSTALL_PREFIX="$OUTPUT"
+
   -DSDL3_ROOT="$OUTPUT"
   -DSDL3_DIR="$OUTPUT/lib/cmake/SDL3"
+
+  -DCMAKE_INSTALL_PREFIX="$OUTPUT"
   -DCMAKE_PREFIX_PATH="$OUTPUT"
+
+  -DMAIN_EXECUTABLE=OFF
 )
 
 #
@@ -113,6 +141,7 @@ cmake \
 	-DSDL_SHARED=OFF \
 	-DSDL_STATIC=ON \
 	-DSDL_TESTS=OFF \
+	-DSDL_OPENGLES=ON \
 	-DSDL_EXAMPLES=OFF
 cmake \
     --build "$BUILD/SDL" \
@@ -124,7 +153,7 @@ cmake \
 # SDL_image
 #
 
-#source "$SOURCE/SDL_image/external/download.sh"
+bash "$SOURCE/SDL_image/external/download.sh"
 cmake \
 	"${CMAKE_COMMON_ARGS[@]}" \
 	-S "$SOURCE/SDL_image" \
@@ -138,101 +167,101 @@ cmake \
 	-DSDLIMAGE_TESTS=OFF       \
 	-DSDLIMAGE_BACKEND_STB=OFF     \
 	-DSDLIMAGE_BACKEND_WIC=OFF     \
-	-DSDLIMAGE_BACKEND_IMAGEIO=OFF \
-	-DSDLIMAGE_AVIF=ON         \
+	-DSDLIMAGE_BACKEND_IMAGEIO=ON  \
+	-DWEBP_BUILD_WEBP_JS=OFF   \
+	-DBROTLI_DISABLE_TESTS=ON  \
+	-DSDLIMAGE_AVIF=OFF        \
 	-DSDLIMAGE_BMP=ON          \
 	-DSDLIMAGE_GIF=ON          \
 	-DSDLIMAGE_JPG=ON          \
-	-DSDLIMAGE_JXL=ON          \
+	-DSDLIMAGE_JXL=OFF         \
 	-DSDLIMAGE_LBM=ON          \
 	-DSDLIMAGE_PCX=ON          \
 	-DSDLIMAGE_PNG=ON          \
+	-DSDLIMAGE_PNG_LIBPNG=OFF  \
 	-DSDLIMAGE_PNM=ON          \
 	-DSDLIMAGE_QOI=ON          \
 	-DSDLIMAGE_SVG=ON          \
 	-DSDLIMAGE_TGA=ON          \
 	-DSDLIMAGE_TIF=ON          \
-	-DSDLIMAGE_WEBP=ON         \
+	-Dtiff-framework=OFF       \
+	-Dtiff-static=ON           \
+	-DSDLIMAGE_WEBP=OFF        \
 	-DSDLIMAGE_XCF=ON          \
 	-DSDLIMAGE_XPM=ON          \
 	-DSDLIMAGE_XV=ON           \
-	-DSDLIMAGE_AVIF_SAVE=ON    \
-	-DSDLIMAGE_JPG_SAVE=ON     \
-	-DSDLIMAGE_PNG_SAVE=ON
+	-DSDLIMAGE_AVIF_SAVE=OFF   \
+	-DSDLIMAGE_JPG_SAVE=OFF    \
+	-DSDLIMAGE_PNG_SAVE=OFF
 cmake \
     --build "$BUILD/SDL_image" \
     --parallel
 cmake \
     --install "$BUILD/SDL_image"
 
+#
+# SDL_mixer
+#
+
+bash "$SOURCE/SDL_mixer/external/download.sh"
+cmake \
+	"${CMAKE_COMMON_ARGS[@]}" \
+	-S "$SOURCE/SDL_mixer" \
+	-B "$BUILD/SDL_mixer" \
+	-DSDLMIXER_STRICT=ON            \
+	-DSDLMIXER_DEPS_SHARED=OFF      \
+	-DSDLMIXER_VENDORED=ON          \
+	-DSDLMIXER_WERROR=OFF           \
+	-DSDLMIXER_STRICT=ON            \
+	-DSDLMIXER_TESTS=OFF            \
+	-DSDLMIXER_EXAMPLES=OFF         \
+	-DSDLMIXER_AIFF=ON              \
+	-DSDLMIXER_WAVE=ON              \
+	-DSDLMIXER_VOC=ON               \
+	-DSDLMIXER_AU=ON                \
+	-DSDLMIXER_FLAC_LIBFLAC=OFF     \
+	-DSDLMIXER_FLAC_DRFLAC=ON       \
+	-DSDLMIXER_GME=OFF              \
+	-DSDLMIXER_GME_SHARED=OFF       \
+	-DSDLMIXER_MOD_XMP=OFF          \
+	-DSDLMIXER_MP3_DRMP3=ON         \
+	-DSDLMIXER_MP3_MPG123=OFF       \
+	-DSDLMIXER_MIDI=OFF             \
+	-DSDLMIXER_MIDI_FLUIDSYNTH=OFF  \
+	-DSDLMIXER_MIDI_TIMIDITY=OFF    \
+	-DSDLMIXER_OPUS=ON              \
+	-DSDLMIXER_VORBIS_STB=ON        \
+	-DSDLMIXER_VORBIS_VORBISFILE=OFF \
+	-DSDLMIXER_WAVPACK=OFF
+cmake \
+    --build "$BUILD/SDL_mixer" \
+    --parallel
+cmake \
+    --install "$BUILD/SDL_mixer"
+
+#
+# SDL_ttf
+#
+
+bash "$SOURCE/SDL_ttf/external/download.sh"
+cmake \
+	"${CMAKE_COMMON_ARGS[@]}" \
+	-S "$SOURCE/SDL_ttf" \
+	-B "$BUILD/SDL_ttf" \
+	-DSDLTTF_STRICT=ON                        \
+	-DSDLTTF_VENDORED=ON                      \
+	-DSDLTTF_WERROR=OFF                       \
+	-DSDLTTF_SAMPLES=OFF                      \
+	-DSDLTTF_FREETYPE=ON                      \
+	-DSDLTTF_HARFBUZZ=ON                      \
+	-DSDLTTF_PLUTOSVG=OFF
+#	-DCMAKE_C_FLAGS="-DPLUTOSVG_BUILD_STATIC"
+cmake \
+    --build "$BUILD/SDL_ttf" \
+    --parallel
+cmake \
+    --install "$BUILD/SDL_ttf"
 : '
-rem
-rem SDL_mixer
-rem dependencies: libgme, libxmp, mpg123, flac, opusfile, vorbis, wavpack
-rem
-
-set SDL3_MIXER_LINK_FLAGS=-LIBPATH:%DEPEND:\=/%/lib zs.lib opus.lib
-
-cmake.exe %CMAKE_COMMON_ARGS%                            ^
-  -S %SOURCE%\SDL_mixer                                  ^
-  -B %BUILD%\SDL_mixer                                   ^
-  -D CMAKE_INSTALL_PREFIX=%OUTPUT%                       ^
-  -D CMAKE_PREFIX_PATH=%DEPEND%                          ^
-  -D CMAKE_SHARED_LINKER_FLAGS="%SDL3_MIXER_LINK_FLAGS%" ^
-  -D BUILD_SHARED_LIBS=ON                                ^
-  -D SDL3_ROOT=%OUTPUT%                                  ^
-  -D SDLMIXER_STRICT=ON                                  ^
-  -D SDLMIXER_DEPS_SHARED=OFF                            ^
-  -D SDLMIXER_VENDORED=OFF                               ^
-  -D SDLMIXER_WERROR=OFF                                 ^
-  -D SDLMIXER_STRICT=ON                                  ^
-  -D SDLMIXER_TESTS=OFF                                  ^
-  -D SDLMIXER_EXAMPLES=OFF                               ^
-  -D SDLMIXER_AIFF=ON                                    ^
-  -D SDLMIXER_WAVE=ON                                    ^
-  -D SDLMIXER_VOC=ON                                     ^
-  -D SDLMIXER_AU=ON                                      ^
-  -D SDLMIXER_FLAC_LIBFLAC=ON                            ^
-  -D SDLMIXER_FLAC_DRFLAC=OFF                            ^
-  -D SDLMIXER_GME=ON                                     ^
-  -D SDLMIXER_MOD_XMP=ON                                 ^
-  -D SDLMIXER_MP3_DRMP3=OFF                              ^
-  -D SDLMIXER_MP3_MPG123=ON                              ^
-  -D SDLMIXER_MIDI_FLUIDSYNTH=OFF                        ^
-  -D SDLMIXER_MIDI_TIMIDITY=ON                           ^
-  -D SDLMIXER_OPUS=ON                                    ^
-  -D SDLMIXER_VORBIS_STB=OFF                             ^
-  -D SDLMIXER_VORBIS_VORBISFILE=ON                       ^
-  -D SDLMIXER_WAVPACK=ON                                 ^
-  || exit /b 1
-ninja.exe -C %BUILD%\SDL_mixer install || exit /b 1
-
-rem
-rem SDL_ttf
-rem dependencies: freetype, harfbuzz, plutosvg
-rem
-
-set SDL3_TTF_LINK_FLAGS=-LIBPATH:%DEPEND:\=/%/lib brotlicommon.lib brotlidec.lib libbz2.lib zs.lib libpng16_static.lib
-
-cmake.exe %CMAKE_COMMON_ARGS%                          ^
-  -S %SOURCE%\SDL_ttf                                  ^
-  -B %BUILD%\SDL_ttf                                   ^
-  -D CMAKE_INSTALL_PREFIX=%OUTPUT%                     ^
-  -D CMAKE_PREFIX_PATH=%DEPEND%                        ^
-  -D CMAKE_SHARED_LINKER_FLAGS="%SDL3_TTF_LINK_FLAGS%" ^
-  -D CMAKE_C_FLAGS="-DPLUTOSVG_BUILD_STATIC"           ^
-  -D BUILD_SHARED_LIBS=ON                              ^
-  -D SDL3_ROOT=%OUTPUT%                                ^
-  -D SDLTTF_STRICT=ON                                  ^
-  -D SDLTTF_VENDORED=OFF                               ^
-  -D SDLTTF_WERROR=OFF                                 ^
-  -D SDLTTF_SAMPLES=OFF                                ^
-  -D SDLTTF_FREETYPE=ON                                ^
-  -D SDLTTF_HARFBUZZ=ON                                ^
-  -D SDLTTF_PLUTOSVG=ON                                ^
-  || exit /b 1
-ninja.exe -C %BUILD%\SDL_ttf install || exit /b 1
-
 rem
 rem SDL_rtf
 rem
@@ -367,20 +396,20 @@ popd
 #
 
 SDL_COMMIT="$(git -C "$SOURCE/SDL" rev-parse HEAD)"
-SDL_IMAGE_COMMIT=$(<"$SOURCE/SDL_image/.git/refs/heads/main")
-#SDL_MIXER_COMMIT=$(<"$SOURCE/SDL_mixer/.git/refs/heads/main")
-#SDL_TTF_COMMIT=$(<"$SOURCE/SDL_ttf/.git/refs/heads/main")
-#SDL_RTF_COMMIT=$(<"$SOURCE/SDL_rtf/.git/refs/heads/main")
-#SDL_NET_COMMIT=$(<"$SOURCE/SDL_net/.git/refs/heads/main")
-#SDL_SOUND_COMMIT=$(<"$SOURCE/SDL_sound/.git/refs/heads/main")
-#SDL_SHADERCROSS_COMMIT=$(<"$SOURCE/SDL_shadercross/.git/refs/heads/main")
-#SDL2_COMPAT_COMMIT=$(<"$SOURCE/SDL2_compat/.git/refs/heads/main")
+SDL_IMAGE_COMMIT="$(git -C "$SOURCE/SDL_image" rev-parse HEAD)"
+SDL_MIXER_COMMIT="$(git -C "$SOURCE/SDL_mixer" rev-parse HEAD)"
+SDL_TTF_COMMIT="$(git -C "$SOURCE/SDL_ttf" rev-parse HEAD)"
+#SDL_RTF_COMMIT="$(git -C "$SOURCE/SDL_rtf" rev-parse HEAD)"
+#SDL_NET_COMMIT="$(git -C "$SOURCE/SDL_net" rev-parse HEAD)"
+#SDL_SOUND_COMMIT="$(git -C "$SOURCE/SDL_sound" rev-parse HEAD)"
+#SDL_SHADERCROSS_COMMIT="$(git -C "$SOURCE/SDL_shadercross" rev-parse HEAD)"
+#SDL2_COMPAT_COMMIT="$(git -C "$SOURCE/SDL2_compat" rev-parse HEAD)"
 
 {
     printf "SDL             %s\n" "$SDL_COMMIT"
     printf "SDL_image       %s\n" "$SDL_IMAGE_COMMIT"
-    #printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
-    #printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
+    printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
+    printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
     #printf "SDL_rtf         %s\n" "$SDL_RTF_COMMIT"
     #printf "SDL_net         %s\n" "$SDL_NET_COMMIT"
     #printf "SDL_sound       %s\n" "$SDL_SOUND_COMMIT"
@@ -388,12 +417,9 @@ SDL_IMAGE_COMMIT=$(<"$SOURCE/SDL_image/.git/refs/heads/main")
     #printf "SDL2_compat     %s\n" "$SDL2_COMPAT_COMMIT"
 } > "$OUTPUT/commits.txt"
 
-echo Moving headers
-for F in SDL3_mixer SDL3_image SDL3_net SDL3_sound SDL3_rtf SDL3_ttf SDL3_shadercross; do
-    mv "$OUTPUT/include/$F"/*.h "$OUTPUT/include/SDL3/" 2>/dev/null
-    rm -rf "$OUTPUT/include/$F" 2>/dev/null
-done
-echo Moved headers
+echo "Coalescing libraries"
+libtool -static -o "$OUTPUT/libSDL3_monolithic.a" "$OUTPUT/lib"/*.a
+echo "Coalesced libraries"
 
 #
 # GitHub Actions
@@ -406,7 +432,7 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
     rm -f "$OUTPUT"/lib/libSDL3_test.* "$OUTPUT"/lib/libSDL2_test.* "$OUTPUT/lib/SDL2main.pdb" 2>/dev/null
     rm -f "$OUTPUT"/include/SDL3/SDL_test*.h "$OUTPUT"/include/SDL2/SDL_test*.h 2>/dev/null
 
-    rm -rf "$OUTPUT/cmake" "$OUTPUT/lib/pkgconfig" "$OUTPUT/licenses" "$OUTPUT/share" 2>/dev/null
+    rm -rf "$OUTPUT/cmake" "$OUTPUT/lib/pkgconfig" "$OUTPUT/licenses" "$OUTPUT/share" "$OUTPUT/optional" 2>/dev/null
 
     echo "Creating SDL3-$TARGET_PLATFORM-$OUTPUT_DATE.zip"
 
@@ -416,8 +442,8 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
         echo "OUTPUT_DATE=$OUTPUT_DATE"
         echo "SDL_COMMIT=$SDL_COMMIT"
         echo "SDL_IMAGE_COMMIT=$SDL_IMAGE_COMMIT"
-        #echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
-        #echo "SDL_TTF_COMMIT=$SDL_TTF_COMMIT"
+        echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
+        echo "SDL_TTF_COMMIT=$SDL_TTF_COMMIT"
         #echo "SDL_RTF_COMMIT=$SDL_RTF_COMMIT"
         #echo "SDL_NET_COMMIT=$SDL_NET_COMMIT"
         #echo "SDL_SOUND_COMMIT=$SDL_SOUND_COMMIT"

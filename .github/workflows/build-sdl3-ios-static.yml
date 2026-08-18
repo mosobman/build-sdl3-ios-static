@@ -19,8 +19,8 @@ jobs:
       OUTPUT_DATE:            ${{ steps.build.outputs.OUTPUT_DATE }}
       SDL_COMMIT:             ${{ steps.build.outputs.SDL_COMMIT }}
       SDL_IMAGE_COMMIT:       ${{ steps.build.outputs.SDL_IMAGE_COMMIT }}
-#      SDL_MIXER_COMMIT:       ${{ steps.build.outputs.SDL_MIXER_COMMIT }}
-#      SDL_TTF_COMMIT:         ${{ steps.build.outputs.SDL_TTF_COMMIT }}
+      SDL_MIXER_COMMIT:       ${{ steps.build.outputs.SDL_MIXER_COMMIT }}
+      SDL_TTF_COMMIT:         ${{ steps.build.outputs.SDL_TTF_COMMIT }}
 #      SDL_RTF_COMMIT:         ${{ steps.build.outputs.SDL_RTF_COMMIT }}
 #      SDL_NET_COMMIT:         ${{ steps.build.outputs.SDL_NET_COMMIT }}
 #      SDL_SOUND_COMMIT:       ${{ steps.build.outputs.SDL_SOUND_COMMIT }}
@@ -62,14 +62,14 @@ jobs:
         run: |
           echo '[SDL commit](https://github.com/libsdl-org/SDL/commit/${{ needs.build.outputs.SDL_COMMIT }})'                                     >>notes.txt
           echo '[SDL_image commit](https://github.com/libsdl-org/SDL_image/commit/${{ needs.build.outputs.SDL_IMAGE_COMMIT }})'                   >>notes.txt
+          echo '[SDL_mixer commit](https://github.com/libsdl-org/SDL_mixer/commit/${{ needs.build.outputs.SDL_MIXER_COMMIT }})'                   >>notes.txt
+          echo '[SDL_ttf commit](https://github.com/libsdl-org/SDL_ttf/commit/${{ needs.build.outputs.SDL_TTF_COMMIT }})'                         >>notes.txt
 
           if gh release view ${{ needs.build.outputs.OUTPUT_DATE }} -R "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release edit ${{ needs.build.outputs.OUTPUT_DATE }} -R "${GITHUB_REPOSITORY}" -t '${{ needs.build.outputs.OUTPUT_DATE }}' -F notes.txt
           else
             gh release create ${{ needs.build.outputs.OUTPUT_DATE }} -R "${GITHUB_REPOSITORY}" -t '${{ needs.build.outputs.OUTPUT_DATE }}' -F notes.txt
           fi
-#          echo '[SDL_mixer commit](https://github.com/libsdl-org/SDL_mixer/commit/${{ needs.build.outputs.SDL_MIXER_COMMIT }})'                   >>notes.txt
-#          echo '[SDL_ttf commit](https://github.com/libsdl-org/SDL_ttf/commit/${{ needs.build.outputs.SDL_TTF_COMMIT }})'                         >>notes.txt
 #          echo '[SDL_rtf commit](https://github.com/libsdl-org/SDL_rtf/commit/${{ needs.build.outputs.SDL_RTF_COMMIT }})'                         >>notes.txt
 #          echo '[SDL_net commit](https://github.com/libsdl-org/SDL_net/commit/${{ needs.build.outputs.SDL_NET_COMMIT }})'                         >>notes.txt
 #          echo '[SDL_sound commit](https://github.com/icculus/SDL_sound/commit/${{ needs.build.outputs.SDL_SOUND_COMMIT }})'                      >>notes.txt

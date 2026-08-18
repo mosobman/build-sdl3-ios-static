@@ -1,0 +1,21 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -690,7 +690,7 @@ if(SDLMIXER_GME)
+             list(APPEND INSTALL_EXTRA_TARGETS ${targets_gme})
+         endif()
+         if(NOT SDLMIXER_GME_SHARED)
+-            list(APPEND PC_LIBS -l$<TARGET_FILE_BASE_NAME:gme>)
++            list(APPEND PC_LIBS -l$<TARGET_FILE_BASE_NAME:gme_static>)
+             list(APPEND INSTALL_EXTRA_CMAKE_MODULES cmake/Findgme.cmake)
+         endif()
+     elseif(SDLMIXER_GME_SHARED AND DEFINED SDLMIXER_DYNAMIC_GME AND EXISTS "${SDLMIXER_DYNAMIC_GME}")
+@@ -864,7 +864,7 @@ if(SDLMIXER_MP3_MPG123)
+             list(APPEND INSTALL_EXTRA_TARGETS libmpg123)
+         endif()
+         if(NOT SDLMIXER_MP3_MPG123_SHARED)
+-            list(APPEND PC_LIBS -l$<TARGET_FILE_BASE_NAME:MPG123::mpg123>)
++            list(APPEND PC_LIBS -l$<TARGET_FILE_BASE_NAME:MPG123::libmpg123>)
+         list(APPEND INSTALL_EXTRA_CMAKE_MODULES cmake/Findmpg123.cmake)
+         endif()
+     elseif(SDLMIXER_MP3_MPG123_SHARED AND DEFINED SDLMIXER_DYNAMIC_MP3_MPG123 AND EXISTS "${SDLMIXER_DYNAMIC_MP3_MPG123}")
