@@ -58,7 +58,7 @@ IOS_DEPLOYMENT_TARGET="${IOS_DEPLOYMENT_TARGET:-15.0}"
 IOS_ARCH="${IOS_ARCH:-arm64}"
 
 mkdir -p "$OUTPUT/compiler-rt"
-cp -av "$(clang -print-resource-dir)/lib/darwin/"* "$OUTPUT/compiler-rt/"
+cp -a "$(clang -print-resource-dir)/lib/darwin/libclang_rt.ios.a" "$OUTPUT/compiler-rt/"
 
 echo "SDK: $SDK"
 echo "Architecture: $IOS_ARCH"
@@ -428,7 +428,7 @@ SDL_TTF_COMMIT="$(git -C "$SOURCE/SDL_ttf" rev-parse HEAD)"
 } > "$OUTPUT/commits.txt"
 
 echo "Coalescing libraries"
-libtool -static -o "$OUTPUT/libSDL3_monolithic.a" "$OUTPUT/lib"/*.a
+libtool -static -o "$OUTPUT/libSDL3_monolithic.a" "$OUTPUT/lib"/*.a "$OUTPUT/compiler-rt/libclang_rt.ios.a"
 echo "Coalesced libraries"
 
 #
