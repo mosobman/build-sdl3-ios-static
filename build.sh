@@ -73,6 +73,7 @@ git_clone SDL             "https://github.com/libsdl-org/SDL"             main |
 git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main || { echo "Failed to clone SDL_image"       >&2; exit 1; }
 git_clone SDL_mixer       "https://github.com/libsdl-org/SDL_mixer"       main || { echo "Failed to clone SDL_mixer"       >&2; exit 1; }
 git_clone SDL_ttf         "https://github.com/libsdl-org/SDL_ttf"         main || { echo "Failed to clone SDL_ttf"         >&2; exit 1; }
+git_clone imgui           "https://github.com/ocornut/imgui"   v1.92.4-docking || { echo "Failed to clone imgui"           >&2; exit 1; }
 #git_clone SDL_rtf         "https://github.com/libsdl-org/SDL_rtf"         main || { echo "Failed to clone SDL_rtf"         >&2; exit 1; }
 #git_clone SDL_net         "https://github.com/libsdl-org/SDL_net"         main || { echo "Failed to clone SDL_net"         >&2; exit 1; }
 #git_clone SDL_sound       "https://github.com/icculus/SDL_sound"          main || { echo "Failed to clone SDL_sound"       >&2; exit 1; }
@@ -271,6 +272,62 @@ cmake \
     --parallel
 cmake \
     --install "$BUILD/SDL_ttf"
+
+#
+# ImGui
+#
+
+mkdir -p "$BUILD/imgui"
+mkdir -p "$OUTPUT/include/imgui"
+cp \
+	"$SOURCE/imgui/imgui.h" \
+	"$SOURCE/imgui/imconfig.h" \
+	"$SOURCE/imgui/imgui_internal.h" \
+	"$SOURCE/imgui/imstb_rectpack.h" \
+	"$SOURCE/imgui/imstb_textedit.h" \
+	"$SOURCE/imgui/imstb_truetype.h" \
+	"$SOURCE/imgui/backends/imgui_impl_sdl3.h" \
+	"$SOURCE/imgui/backends/imgui_impl_sdlgpu3.h" \
+	"$OUTPUT/include/imgui/"
+
+IMGUI_CXX_FLAGS=(
+	-std=c++11
+	-O2
+	-DNDEBUG
+	-fPIC
+	-fno-objc-msgsend-selector-stubs
+
+	-isysroot "$SDK"
+	-arch "$IOS_ARCH"
+	-miphoneos-version-min="$IOS_DEPLOYMENT_TARGET"
+
+	-I"$SOURCE/imgui"
+	-I"$SOURCE/imgui/backends"
+)
+
+IMGUI_SOURCES=(
+	"$SOURCE/imgui/imgui.cpp"
+	"$SOURCE/imgui/imgui_draw.cpp"
+	"$SOURCE/imgui/imgui_tables.cpp"
+	"$SOURCE/imgui/imgui_widgets.cpp"
+
+	"$SOURCE/imgui/backends/imgui_impl_sdl3.cpp"
+	"$SOURCE/imgui/backends/imgui_impl_sdlgpu3.cpp"
+)
+
+for source in "${IMGUI_SOURCES[@]}"; do
+	name="$(basename "$source" .cpp)"
+
+	echo "Compiling ImGui: $name"
+
+	"$CXX" \
+		"${IMGUI_CXX_FLAGS[@]}" \
+		-c "$source" \
+		-o "$BUILD/imgui/$name.o"
+done
+
+libtool -static -o "$OUTPUT/lib/libimgui.a" "$BUILD/imgui"/*.o
+
 : '
 rem
 rem SDL_rtf
@@ -409,6 +466,7 @@ SDL_COMMIT="$(git -C "$SOURCE/SDL" rev-parse HEAD)"
 SDL_IMAGE_COMMIT="$(git -C "$SOURCE/SDL_image" rev-parse HEAD)"
 SDL_MIXER_COMMIT="$(git -C "$SOURCE/SDL_mixer" rev-parse HEAD)"
 SDL_TTF_COMMIT="$(git -C "$SOURCE/SDL_ttf" rev-parse HEAD)"
+IMGUI_COMMIT="$(git -C "$SOURCE/imgui" rev-parse HEAD)"
 #SDL_RTF_COMMIT="$(git -C "$SOURCE/SDL_rtf" rev-parse HEAD)"
 #SDL_NET_COMMIT="$(git -C "$SOURCE/SDL_net" rev-parse HEAD)"
 #SDL_SOUND_COMMIT="$(git -C "$SOURCE/SDL_sound" rev-parse HEAD)"
@@ -420,6 +478,7 @@ SDL_TTF_COMMIT="$(git -C "$SOURCE/SDL_ttf" rev-parse HEAD)"
     printf "SDL_image       %s\n" "$SDL_IMAGE_COMMIT"
     printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
     printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
+    printf "ImGui           %s\n" "$IMGUI_COMMIT"
     #printf "SDL_rtf         %s\n" "$SDL_RTF_COMMIT"
     #printf "SDL_net         %s\n" "$SDL_NET_COMMIT"
     #printf "SDL_sound       %s\n" "$SDL_SOUND_COMMIT"
@@ -454,6 +513,7 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
         echo "SDL_IMAGE_COMMIT=$SDL_IMAGE_COMMIT"
         echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
         echo "SDL_TTF_COMMIT=$SDL_TTF_COMMIT"
+        echo "IMGUI_COMMIT=$IMGUI_COMMIT"
         #echo "SDL_RTF_COMMIT=$SDL_RTF_COMMIT"
         #echo "SDL_NET_COMMIT=$SDL_NET_COMMIT"
         #echo "SDL_SOUND_COMMIT=$SDL_SOUND_COMMIT"
