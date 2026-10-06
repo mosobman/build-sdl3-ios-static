@@ -107,11 +107,6 @@ CMAKE_COMMON_ARGS=(
   -DCMAKE_OBJC_COMPILER="$OBJCC"
   -DCMAKE_OBJCXX_COMPILER="$OBJCXX"
 
-  -DCMAKE_C_FLAGS="-fno-objc-msgsend-selector-stubs"
-  -DCMAKE_CXX_FLAGS="-fno-objc-msgsend-selector-stubs"
-  -DCMAKE_OBJC_FLAGS="-fno-objc-msgsend-selector-stubs"
-  -DCMAKE_OBJCXX_FLAGS="-fno-objc-msgsend-selector-stubs"
-
   -DCMAKE_POLICY_DEFAULT_CMP0074=NEW
   -DCMAKE_POLICY_DEFAULT_CMP0092=NEW
   -DCMAKE_POLICY_DEFAULT_CMP0111=NEW
@@ -295,7 +290,6 @@ IMGUI_CXX_FLAGS=(
 	-O2
 	-DNDEBUG
 	-fPIC
-	-fno-objc-msgsend-selector-stubs
 
 	-isysroot "$SDK"
 	-arch "$IOS_ARCH"
@@ -303,6 +297,7 @@ IMGUI_CXX_FLAGS=(
 
 	-I"$SOURCE/imgui"
 	-I"$SOURCE/imgui/backends"
+	-I"$OUTPUT/include"
 )
 
 IMGUI_SOURCES=(
