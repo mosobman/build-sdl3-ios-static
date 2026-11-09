@@ -1,0 +1,437 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3393,6 +3393,10 @@
+   elseif(WINDOWS)
+     sdl_sources(${SDL3_SOURCE_DIR}/src/dialog/windows/SDL_windowsdialog.c)
+     set(HAVE_SDL_DIALOG TRUE)
++  elseif(IOS)
++    sdl_sources(${SDL3_SOURCE_DIR}/src/dialog/uikit/SDL_uikitdialog.m)
++    set(HAVE_SDL_DIALOG TRUE)
++    sdl_link_dependency(uniformtypeidentifiers LIBS "$<LINK_LIBRARY:FRAMEWORK,UniformTypeIdentifiers>" PKG_CONFIG_LINK_OPTIONS "-Wl,-framework,UniformTypeIdentifiers")
+   elseif(MACOS)
+     sdl_sources(${SDL3_SOURCE_DIR}/src/dialog/cocoa/SDL_cocoadialog.m)
+     set(HAVE_SDL_DIALOG TRUE)
+diff --git a/src/dialog/uikit/SDL_uikitdialog.m b/src/dialog/uikit/SDL_uikitdialog.m
+new file mode 100644
+--- /dev/null
++++ b/src/dialog/uikit/SDL_uikitdialog.m
+@@ -0,0 +1,418 @@
++/*
++  Simple DirectMedia Layer
++  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
++
++  This software is provided 'as-is', without any express or implied
++  warranty.  In no event will the authors be held liable for any damages
++  arising from the use of this software.
++
++  Permission is granted to anyone to use this software for any purpose,
++  including commercial applications, and to alter it and redistribute it
++  freely, subject to the following restrictions:
++
++  1. The origin of this software must not be misrepresented; you must not
++     claim that you wrote the original software. If you use this software
++     in a product, an acknowledgment in the product documentation would be
++     appreciated but is not required.
++  2. Altered source versions must be plainly marked as such, and must not be
++     misrepresented as being the original software.
++  3. This notice may not be removed or altered from any source distribution.
++*/
++
++#include "SDL_internal.h"
++#include "../SDL_dialog.h"
++#include "../SDL_dialog_utils.h"
++
++#ifdef SDL_PLATFORM_IOS
++
++#include <SDL3/SDL_video.h>
++#import <UIKit/UIKit.h>
++#import <UniformTypeIdentifiers/UTType.h>
++#import <objc/runtime.h>
++
++static char SDL_uikit_dialog_delegate_key;
++
++/* Security-scoped folder and export URLs are kept valid for the process lifetime.
++   SDL's file-dialog callback API has no matching operation to release the scope. */
++static NSMutableArray<NSURL *> *SDL_uikit_security_scoped_urls;
++
++static void UIKit_RetainSecurityScopedURL(NSURL *url)
++{
++    if (![url startAccessingSecurityScopedResource]) {
++        return;
++    }
++
++    if (!SDL_uikit_security_scoped_urls) {
++        SDL_uikit_security_scoped_urls = [[NSMutableArray alloc] init];
++        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillTerminateNotification
++                                                          object:nil
++                                                           queue:nil
++                                                      usingBlock:^(NSNotification *notification) {
++            for (NSURL *scoped_url in SDL_uikit_security_scoped_urls) {
++                [scoped_url stopAccessingSecurityScopedResource];
++            }
++            [SDL_uikit_security_scoped_urls removeAllObjects];
++        }];
++    }
++
++    [SDL_uikit_security_scoped_urls addObject:url];
++}
++
++static UIViewController *UIKit_GetDialogPresenter(SDL_Window *window)
++{
++    UIWindow *uiwindow = nil;
++
++    if (window) {
++        SDL_PropertiesID props = SDL_GetWindowProperties(window);
++        uiwindow = (__bridge UIWindow *)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER, NULL);
++    }
++
++    if (!uiwindow) {
++        UIApplication *application = [UIApplication sharedApplication];
++        for (UIScene *scene in application.connectedScenes) {
++            if (![scene isKindOfClass:[UIWindowScene class]] || scene.activationState != UISceneActivationStateForegroundActive) {
++                continue;
++            }
++
++            UIWindowScene *window_scene = (UIWindowScene *)scene;
++            for (UIWindow *candidate in window_scene.windows) {
++                if (candidate.isKeyWindow) {
++                    uiwindow = candidate;
++                    break;
++                }
++            }
++            if (uiwindow) {
++                break;
++            }
++        }
++    }
++
++    UIViewController *presenter = uiwindow.rootViewController;
++    while (presenter.presentedViewController && !presenter.presentedViewController.isBeingDismissed) {
++        presenter = presenter.presentedViewController;
++    }
++    return presenter;
++}
++
++static void UIKit_AddFileExtensionType(NSMutableArray<UTType *> *types, const char *pattern_ptr)
++{
++    if (!*pattern_ptr) {
++        return;  // in case the string had an extra ';' at the end.
++    }
++
++    // -[UTType typeWithFilenameExtension:] will return nil if there's a period in the string.
++    // It's better to allow too many files than not allow the one the user actually needs,
++    // so just take the part after the '.'.
++    const char *dot = SDL_strrchr(pattern_ptr, '.');
++    NSString *extstr = [NSString stringWithFormat:@"%s", dot ? (dot + 1) : pattern_ptr];
++    UTType *uttype = [UTType typeWithFilenameExtension:extstr];
++    if (uttype) {
++        [types addObject:uttype];
++    }
++}
++
++static NSArray<UTType *> *UIKit_GetAllowedContentTypes(const SDL_DialogFileFilter *filters, int nfilters)
++{
++    NSMutableArray<UTType *> *types = [[NSMutableArray alloc] initWithCapacity:nfilters];
++    bool has_all_files = false;
++
++    if (!types) {
++        return nil;
++    }
++
++    if (filters) {
++        for (int i = 0; i < nfilters; i++) {
++            char *pattern = SDL_strdup(filters[i].pattern);
++            if (!pattern) {
++                return nil;
++            }
++
++            char *pattern_ptr = pattern;
++            for (char *c = pattern; *c; c++) {
++                if (*c == ';') {
++                    *c = '\0';
++                    UIKit_AddFileExtensionType(types, pattern_ptr);
++                    pattern_ptr = c + 1;
++                } else if (*c == '*') {
++                    has_all_files = true;
++                }
++            }
++
++            UIKit_AddFileExtensionType(types, pattern_ptr);
++            SDL_free(pattern);
++        }
++    }
++
++    if (has_all_files || types.count == 0) {
++        UTType *item_type = [UTType typeWithIdentifier:@"public.item"];
++        if (item_type) {
++            return @[ item_type ];
++        }
++        return nil;
++    }
++
++    return types;
++}
++
++static NSString *UIKit_GetFirstFileExtension(const SDL_DialogFileFilter *filters, int nfilters)
++{
++    for (int i = 0; filters && i < nfilters; i++) {
++        char *pattern = SDL_strdup(filters[i].pattern);
++        if (!pattern) {
++            return nil;
++        }
++
++        char *separator = SDL_strchr(pattern, ';');
++        if (separator) {
++            *separator = '\0';
++        }
++
++        const char *dot = SDL_strrchr(pattern, '.');
++        const char *extension = dot ? dot + 1 : pattern;
++        NSString *result = nil;
++        if (*extension && !SDL_strchr(extension, '*')) {
++            result = [NSString stringWithUTF8String:extension];
++        }
++        SDL_free(pattern);
++        if (result.length > 0) {
++            return result;
++        }
++    }
++    return nil;
++}
++
++static NSURL *UIKit_GetDefaultDirectory(const char *default_location, SDL_FileDialogType type, NSString **filename)
++{
++    if (!default_location || !*default_location) {
++        return nil;
++    }
++
++    NSString *path = [NSString stringWithUTF8String:default_location];
++    if (!path) {
++        return nil;
++    }
++
++    BOOL is_directory = [path hasSuffix:@"/"];
++    if (!is_directory) {
++        [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&is_directory];
++    }
++
++    NSURL *url = [NSURL fileURLWithPath:path isDirectory:is_directory];
++    if (type == SDL_FILEDIALOG_OPENFOLDER || is_directory) {
++        return url;
++    }
++
++    if (filename) {
++        *filename = url.lastPathComponent;
++    }
++    return url.URLByDeletingLastPathComponent;
++}
++
++@interface SDLUIKitFileDialogDelegate : NSObject <UIDocumentPickerDelegate>
++@property(nonatomic, assign) SDL_DialogFileCallback callback;
++@property(nonatomic, assign) void *userdata;
++@property(nonatomic, assign) BOOL retain_security_scope;
++@property(nonatomic, strong) NSURL *temporary_directory_url;
++@end
++
++@implementation SDLUIKitFileDialogDelegate
++
++- (void)cleanupTemporaryFile
++{
++    if (self.temporary_directory_url) {
++        [[NSFileManager defaultManager] removeItemAtURL:self.temporary_directory_url error:nil];
++        self.temporary_directory_url = nil;
++    }
++}
++
++- (void)finishWithURLs:(NSArray<NSURL *> *)urls
++{
++    SDL_DialogFileCallback callback = self.callback;
++    void *userdata = self.userdata;
++    self.callback = NULL;
++    self.userdata = NULL;
++
++    if (!callback) {
++        [self cleanupTemporaryFile];
++        return;
++    }
++
++    if (self.retain_security_scope) {
++        for (NSURL *url in urls) {
++            UIKit_RetainSecurityScopedURL(url);
++        }
++    }
++
++    NSUInteger count = urls.count;
++    const char *files[count + 1];
++    for (NSUInteger i = 0; i < count; i++) {
++        NSURL *url = urls[i];
++        NSString *path = url.isFileURL ? url.path : nil;
++        if (!path) {
++            SDL_SetError("The document picker returned a URL that is not a local file");
++            callback(userdata, NULL, -1);
++            [self cleanupTemporaryFile];
++            return;
++        }
++        files[i] = path.UTF8String;
++    }
++    files[count] = NULL;
++    callback(userdata, files, -1);
++
++    [self cleanupTemporaryFile];
++}
++
++- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls
++{
++    [self finishWithURLs:urls];
++}
++
++- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller
++{
++    const char *files[] = { NULL };
++    SDL_DialogFileCallback callback = self.callback;
++    void *userdata = self.userdata;
++    self.callback = NULL;
++    self.userdata = NULL;
++    if (callback) {
++        callback(userdata, files, -1);
++    }
++    [self cleanupTemporaryFile];
++}
++
++@end
++
++void SDL_SYS_ShowFileDialogWithProperties(SDL_FileDialogType type, SDL_DialogFileCallback callback, void *userdata, SDL_PropertiesID props)
++{
++    if (!callback) {
++        return;
++    }
++
++    if (![NSThread isMainThread]) {
++        SDL_SetError("iOS file dialogs must be opened from the main thread");
++        callback(userdata, NULL, -1);
++        return;
++    }
++
++    if (SDL_GetHint(SDL_HINT_FILE_DIALOG_DRIVER) != NULL) {
++        SDL_SetError("File dialog driver unsupported (don't set SDL_HINT_FILE_DIALOG_DRIVER)");
++        callback(userdata, NULL, -1);
++        return;
++    }
++
++    SDL_Window *window = SDL_GetPointerProperty(props, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, NULL);
++    SDL_DialogFileFilter *filters = SDL_GetPointerProperty(props, SDL_PROP_FILE_DIALOG_FILTERS_POINTER, NULL);
++    int nfilters = (int)SDL_GetNumberProperty(props, SDL_PROP_FILE_DIALOG_NFILTERS_NUMBER, 0);
++    bool allow_many = SDL_GetBooleanProperty(props, SDL_PROP_FILE_DIALOG_MANY_BOOLEAN, false);
++    const char *default_location = SDL_GetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING, NULL);
++    const char *title = SDL_GetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, NULL);
++
++    if (filters) {
++        const char *msg = validate_filters(filters, nfilters);
++        if (msg) {
++            SDL_SetError("%s", msg);
++            callback(userdata, NULL, -1);
++            return;
++        }
++    }
++
++    UIViewController *presenter = UIKit_GetDialogPresenter(window);
++    if (!presenter) {
++        SDL_SetError("Unable to find an active iOS view controller for the file dialog");
++        callback(userdata, NULL, -1);
++        return;
++    }
++
++    UIDocumentPickerViewController *picker = nil;
++    NSURL *default_directory = nil;
++    NSString *save_filename = nil;
++    SDLUIKitFileDialogDelegate *delegate = [[SDLUIKitFileDialogDelegate alloc] init];
++    delegate.callback = callback;
++    delegate.userdata = userdata;
++
++    switch (type) {
++    case SDL_FILEDIALOG_OPENFILE: {
++        NSArray<UTType *> *content_types = UIKit_GetAllowedContentTypes(filters, nfilters);
++        if (!content_types) {
++            SDL_OutOfMemory();
++            callback(userdata, NULL, -1);
++            return;
++        }
++        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:content_types asCopy:YES];
++        picker.allowsMultipleSelection = allow_many;
++        default_directory = UIKit_GetDefaultDirectory(default_location, type, NULL);
++        break;
++    }
++
++    case SDL_FILEDIALOG_OPENFOLDER: {
++        UTType *folder_type = [UTType typeWithIdentifier:@"public.folder"];
++        if (!folder_type) {
++            SDL_SetError("Unable to create the iOS folder document type");
++            callback(userdata, NULL, -1);
++            return;
++        }
++        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ folder_type ]];
++        picker.allowsMultipleSelection = allow_many;
++        delegate.retain_security_scope = YES;
++        default_directory = UIKit_GetDefaultDirectory(default_location, type, NULL);
++        break;
++    }
++
++    case SDL_FILEDIALOG_SAVEFILE: {
++        default_directory = UIKit_GetDefaultDirectory(default_location, type, &save_filename);
++        if (!save_filename) {
++            save_filename = @"Untitled";
++        }
++        if (save_filename.pathExtension.length == 0) {
++            NSString *extension = UIKit_GetFirstFileExtension(filters, nfilters);
++            if (extension) {
++                save_filename = [save_filename stringByAppendingPathExtension:extension];
++            }
++        }
++
++        NSString *temporary_directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"SDLFileDialog-%@", [[NSUUID UUID] UUIDString]]];
++        NSURL *temporary_directory_url = [NSURL fileURLWithPath:temporary_directory isDirectory:YES];
++        NSURL *temporary_file_url = [temporary_directory_url URLByAppendingPathComponent:save_filename];
++        NSError *error = nil;
++        NSFileManager *file_manager = [NSFileManager defaultManager];
++        if (![file_manager createDirectoryAtURL:temporary_directory_url withIntermediateDirectories:YES attributes:nil error:&error] ||
++            ![file_manager createFileAtPath:temporary_file_url.path contents:[NSData data] attributes:nil]) {
++            SDL_SetError("Couldn't create temporary file for iOS save dialog: %s", error ? error.localizedDescription.UTF8String : "unknown error");
++            [file_manager removeItemAtURL:temporary_directory_url error:nil];
++            callback(userdata, NULL, -1);
++            return;
++        }
++
++        picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ temporary_file_url ] asCopy:YES];
++        delegate.temporary_directory_url = temporary_directory_url;
++        delegate.retain_security_scope = YES;
++        break;
++    }
++
++    default:
++        SDL_SetError("Unsupported file dialog type: %d", (int)type);
++        callback(userdata, NULL, -1);
++        return;
++    }
++
++    if (!picker) {
++        SDL_SetError("Couldn't create iOS document picker");
++        callback(userdata, NULL, -1);
++        [delegate cleanupTemporaryFile];
++        return;
++    }
++
++    if (title) {
++        picker.title = [NSString stringWithUTF8String:title];
++    }
++    if (default_directory) {
++        picker.directoryURL = default_directory;
++    }
++    picker.shouldShowFileExtensions = YES;
++
++    picker.delegate = delegate;
++    objc_setAssociatedObject(picker, &SDL_uikit_dialog_delegate_key, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    [presenter presentViewController:picker animated:YES completion:nil];
++}
++
++#endif // SDL_PLATFORM_IOS

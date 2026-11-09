@@ -89,6 +89,8 @@ git_clone imgui           "https://github.com/ocornut/imgui"   v1.92.4-docking |
 #
 
 echo Applying patches
+git -C "$SOURCE/SDL" apply --check -p1 "$SCRIPT_DIR/patches/SDL_uikitdialog.patch"
+git -C "$SOURCE/SDL" apply -p1 "$SCRIPT_DIR/patches/SDL_uikitdialog.patch"
 #git -C "$SOURCE/SDL_mixer" apply -p1 "$SCRIPT_DIR/patches/SDL_mixer.patch"
 git -C "$SOURCE/SDL_ttf" apply -p1 "$SCRIPT_DIR/patches/SDL_ttf.patch"
 echo Applied patches
@@ -147,6 +149,7 @@ cmake \
 	-DSDL_SHARED=OFF \
 	-DSDL_STATIC=ON \
 	-DSDL_TESTS=OFF \
+	-DSDL_DIALOG=ON \
 	-DSDL_OPENGLES=ON \
 	-DSDL_EXAMPLES=OFF
 cmake \
