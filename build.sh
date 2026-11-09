@@ -27,12 +27,12 @@ git_clone() {
 	cd "$SOURCE" || return 1
 
     if [ -d "$1" ]; then
-        echo "Updating $1..."
+        echo "Updating $1 ($3)... $2"
         git -C "$1" clean --quiet -fdx
         git -C "$1" fetch --quiet --no-tags origin "$3":refs/remotes/origin/"$3" || return 1
         git -C "$1" reset --quiet --hard origin/"$3"                             || return 1
     else
-        echo "Cloning $1..."
+        echo "Cloning $1 ($3)... $2"
         git clone --quiet --branch "$3" --no-tags --depth 1 "$2" "$1" || return 1
     fi
 
