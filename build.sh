@@ -74,6 +74,7 @@ git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main |
 git_clone SDL_mixer       "https://github.com/libsdl-org/SDL_mixer"       main || { echo "Failed to clone SDL_mixer"       >&2; exit 1; }
 git_clone SDL_ttf         "https://github.com/libsdl-org/SDL_ttf"         main || { echo "Failed to clone SDL_ttf"         >&2; exit 1; }
 git_clone imgui           "https://github.com/ocornut/imgui"   v1.92.4-docking || { echo "Failed to clone imgui"           >&2; exit 1; }
+git_clone clay            "https://github.com/nicbarker/clay"             main || { echo "Failed to clone clay"            >&2; exit 1; }
 #git_clone SDL_rtf         "https://github.com/libsdl-org/SDL_rtf"         main || { echo "Failed to clone SDL_rtf"         >&2; exit 1; }
 #git_clone SDL_net         "https://github.com/libsdl-org/SDL_net"         main || { echo "Failed to clone SDL_net"         >&2; exit 1; }
 #git_clone SDL_sound       "https://github.com/icculus/SDL_sound"          main || { echo "Failed to clone SDL_sound"       >&2; exit 1; }
@@ -326,6 +327,39 @@ done
 
 libtool -static -o "$OUTPUT/lib/libimgui.a" "$BUILD/imgui"/*.o
 
+#
+# Clay
+#
+
+mkdir -p "$BUILD/clay"
+mkdir -p "$OUTPUT/include/clay"
+cat > "$BUILD/clay/clay.c" <<'EOF'
+#define CLAY_IMPLEMENTATION
+#include "clay.h"
+EOF
+
+cp "$SOURCE/clay/clay.h" "$OUTPUT/include/clay/"
+
+CLAY_C_FLAGS=(
+    -std=c99
+    -O2
+    -DNDEBUG
+    -fPIC
+
+    -isysroot "$SDK"
+    -arch "$IOS_ARCH"
+    -miphoneos-version-min="$IOS_DEPLOYMENT_TARGET"
+
+    -I"$SOURCE/clay"
+)
+
+"$CC" \
+    "${CLAY_C_FLAGS[@]}" \
+    -c "$BUILD/clay/clay.c" \
+    -o "$BUILD/clay/clay.o"
+
+libtool -static -o "$OUTPUT/lib/libclay.a" "$BUILD/clay/clay.o"
+
 : '
 rem
 rem SDL_rtf
@@ -465,6 +499,7 @@ SDL_IMAGE_COMMIT="$(git -C "$SOURCE/SDL_image" rev-parse HEAD)"
 SDL_MIXER_COMMIT="$(git -C "$SOURCE/SDL_mixer" rev-parse HEAD)"
 SDL_TTF_COMMIT="$(git -C "$SOURCE/SDL_ttf" rev-parse HEAD)"
 IMGUI_COMMIT="$(git -C "$SOURCE/imgui" rev-parse HEAD)"
+CLAY_COMMIT="$(git -C "$SOURCE/clay" rev-parse HEAD)"
 #SDL_RTF_COMMIT="$(git -C "$SOURCE/SDL_rtf" rev-parse HEAD)"
 #SDL_NET_COMMIT="$(git -C "$SOURCE/SDL_net" rev-parse HEAD)"
 #SDL_SOUND_COMMIT="$(git -C "$SOURCE/SDL_sound" rev-parse HEAD)"
@@ -477,6 +512,7 @@ IMGUI_COMMIT="$(git -C "$SOURCE/imgui" rev-parse HEAD)"
     printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
     printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
     printf "ImGui           %s\n" "$IMGUI_COMMIT"
+    printf "Clay            %s\n" "$CLAY_COMMIT"
     #printf "SDL_rtf         %s\n" "$SDL_RTF_COMMIT"
     #printf "SDL_net         %s\n" "$SDL_NET_COMMIT"
     #printf "SDL_sound       %s\n" "$SDL_SOUND_COMMIT"
@@ -512,6 +548,7 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
         echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
         echo "SDL_TTF_COMMIT=$SDL_TTF_COMMIT"
         echo "IMGUI_COMMIT=$IMGUI_COMMIT"
+        echo "CLAY_COMMIT=$CLAY_COMMIT"
         #echo "SDL_RTF_COMMIT=$SDL_RTF_COMMIT"
         #echo "SDL_NET_COMMIT=$SDL_NET_COMMIT"
         #echo "SDL_SOUND_COMMIT=$SDL_SOUND_COMMIT"
