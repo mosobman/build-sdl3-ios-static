@@ -302,7 +302,6 @@ cmake \
 		--disable-doc \
 		--disable-avdevice \
 		--disable-avfilter \
-		--disable-postproc \
 		--disable-swscale \
 		--enable-avcodec \
 		--enable-avformat \
