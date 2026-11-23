@@ -22,6 +22,7 @@ jobs:
       SDL_IMAGE_COMMIT:       ${{ steps.build.outputs.SDL_IMAGE_COMMIT }}
       SDL_MIXER_COMMIT:       ${{ steps.build.outputs.SDL_MIXER_COMMIT }}
       SDL_TTF_COMMIT:         ${{ steps.build.outputs.SDL_TTF_COMMIT }}
+      FFMPEG_COMMIT:          ${{ steps.build.outputs.FFMPEG_COMMIT }}
       IMGUI_COMMIT:           ${{ steps.build.outputs.IMGUI_COMMIT }}
       CLAY_COMMIT:            ${{ steps.build.outputs.CLAY_COMMIT }}
 #      SDL_RTF_COMMIT:         ${{ steps.build.outputs.SDL_RTF_COMMIT }}
@@ -77,6 +78,7 @@ jobs:
           echo '[SDL_image commit](https://github.com/libsdl-org/SDL_image/commit/${{ needs.build.outputs.SDL_IMAGE_COMMIT }})'                   >>notes.txt
           echo '[SDL_mixer commit](https://github.com/libsdl-org/SDL_mixer/commit/${{ needs.build.outputs.SDL_MIXER_COMMIT }})'                   >>notes.txt
           echo '[SDL_ttf commit](https://github.com/libsdl-org/SDL_ttf/commit/${{ needs.build.outputs.SDL_TTF_COMMIT }})'                         >>notes.txt
+          echo '[FFmpeg commit](https://github.com/FFmpeg/FFmpeg/commit/${{ needs.build.outputs.FFMPEG_COMMIT }})'                                >>notes.txt
           echo '[ImGui commit](https://github.com/ocornut/imgui/commit/${{ needs.build.outputs.IMGUI_COMMIT }})'                                  >>notes.txt
           echo '[Clay commit](https://github.com/nicbarker/clay/commit/${{ needs.build.outputs.CLAY_COMMIT }})'                                   >>notes.txt
 

@@ -45,6 +45,7 @@ git_clone() {
 
 command -v git >/dev/null   || { echo "git not found"   >&2; exit 1; }
 command -v cmake >/dev/null || { echo "cmake not found" >&2; exit 1; }
+command -v make >/dev/null  || { echo "make not found"  >&2; exit 1; }
 command -v xcrun >/dev/null || { echo "xcrun not found" >&2; exit 1; }
 
 SDK="${IOS_SDKROOT:-$(xcrun --sdk iphoneos --show-sdk-path)}"
@@ -73,6 +74,7 @@ git_clone SDL             "https://github.com/libsdl-org/SDL"             main |
 git_clone SDL_image       "https://github.com/libsdl-org/SDL_image"       main || { echo "Failed to clone SDL_image"       >&2; exit 1; }
 git_clone SDL_mixer       "https://github.com/libsdl-org/SDL_mixer"       main || { echo "Failed to clone SDL_mixer"       >&2; exit 1; }
 git_clone SDL_ttf         "https://github.com/libsdl-org/SDL_ttf"         main || { echo "Failed to clone SDL_ttf"         >&2; exit 1; }
+git_clone FFmpeg          "https://github.com/FFmpeg/FFmpeg"              release/9.0 || { echo "Failed to clone FFmpeg"    >&2; exit 1; }
 git_clone imgui           "https://github.com/ocornut/imgui"   v1.92.4-docking || { echo "Failed to clone imgui"           >&2; exit 1; }
 git_clone clay            "https://github.com/nicbarker/clay"             main || { echo "Failed to clone clay"            >&2; exit 1; }
 #git_clone SDL_rtf         "https://github.com/libsdl-org/SDL_rtf"         main || { echo "Failed to clone SDL_rtf"         >&2; exit 1; }
@@ -272,6 +274,55 @@ cmake \
     --parallel
 cmake \
     --install "$BUILD/SDL_ttf"
+
+#
+# FFmpeg
+#
+
+(
+	cd "$SOURCE/FFmpeg"
+	./configure \
+		--prefix="$OUTPUT" \
+		--target-os=darwin \
+		--arch="$IOS_ARCH" \
+		--enable-cross-compile \
+		--cc="$CC" \
+		--cxx="$CXX" \
+		--ar="$(xcrun --sdk iphoneos --find ar)" \
+		--ranlib="$(xcrun --sdk iphoneos --find ranlib)" \
+		--nm="$(xcrun --sdk iphoneos --find nm)" \
+		--sysroot="$SDK" \
+		--extra-cflags="-arch $IOS_ARCH -miphoneos-version-min=$IOS_DEPLOYMENT_TARGET" \
+		--extra-ldflags="-arch $IOS_ARCH -miphoneos-version-min=$IOS_DEPLOYMENT_TARGET" \
+		--enable-version3 \
+		--enable-static \
+		--disable-shared \
+		--disable-autodetect \
+		--disable-programs \
+		--disable-doc \
+		--disable-avdevice \
+		--disable-avfilter \
+		--disable-postproc \
+		--disable-swscale \
+		--enable-avcodec \
+		--enable-avformat \
+		--enable-avutil \
+		--enable-swresample
+	make -j"$(sysctl -n hw.logicalcpu)"
+	make install
+)
+
+for library in libavcodec.a libavformat.a libavutil.a libswresample.a; do
+	[[ -f "$OUTPUT/lib/$library" ]] || { echo "FFmpeg library not found: $OUTPUT/lib/$library" >&2; exit 1; }
+done
+
+for header in \
+	include/libavcodec/avcodec.h \
+	include/libavformat/avformat.h \
+	include/libavutil/avutil.h \
+	include/libswresample/swresample.h; do
+	[[ -f "$OUTPUT/$header" ]] || { echo "FFmpeg header not found: $OUTPUT/$header" >&2; exit 1; }
+done
 
 #
 # ImGui
@@ -499,6 +550,7 @@ SDL_COMMIT="$(git -C "$SOURCE/SDL" rev-parse HEAD)"
 SDL_IMAGE_COMMIT="$(git -C "$SOURCE/SDL_image" rev-parse HEAD)"
 SDL_MIXER_COMMIT="$(git -C "$SOURCE/SDL_mixer" rev-parse HEAD)"
 SDL_TTF_COMMIT="$(git -C "$SOURCE/SDL_ttf" rev-parse HEAD)"
+FFMPEG_COMMIT="$(git -C "$SOURCE/FFmpeg" rev-parse HEAD)"
 IMGUI_COMMIT="$(git -C "$SOURCE/imgui" rev-parse HEAD)"
 CLAY_COMMIT="$(git -C "$SOURCE/clay" rev-parse HEAD)"
 #SDL_RTF_COMMIT="$(git -C "$SOURCE/SDL_rtf" rev-parse HEAD)"
@@ -512,6 +564,7 @@ CLAY_COMMIT="$(git -C "$SOURCE/clay" rev-parse HEAD)"
     printf "SDL_image       %s\n" "$SDL_IMAGE_COMMIT"
     printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
     printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
+    printf "FFmpeg          %s\n" "$FFMPEG_COMMIT"
     printf "ImGui           %s\n" "$IMGUI_COMMIT"
     printf "Clay            %s\n" "$CLAY_COMMIT"
     #printf "SDL_rtf         %s\n" "$SDL_RTF_COMMIT"
@@ -548,6 +601,7 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
         echo "SDL_IMAGE_COMMIT=$SDL_IMAGE_COMMIT"
         echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
         echo "SDL_TTF_COMMIT=$SDL_TTF_COMMIT"
+        echo "FFMPEG_COMMIT=$FFMPEG_COMMIT"
         echo "IMGUI_COMMIT=$IMGUI_COMMIT"
         echo "CLAY_COMMIT=$CLAY_COMMIT"
         #echo "SDL_RTF_COMMIT=$SDL_RTF_COMMIT"
