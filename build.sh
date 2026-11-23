@@ -47,7 +47,7 @@ command -v git >/dev/null   || { echo "git not found"   >&2; exit 1; }
 command -v cmake >/dev/null || { echo "cmake not found" >&2; exit 1; }
 command -v xcrun >/dev/null || { echo "xcrun not found" >&2; exit 1; }
 
-SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+SDK="${IOS_SDKROOT:-$(xcrun --sdk iphoneos --show-sdk-path)}"
 CC="$(xcrun --sdk iphoneos --find clang)"
 CXX="$(xcrun --sdk iphoneos --find clang++)"
 OBJCC="$(xcrun --sdk iphoneos --find clang)"

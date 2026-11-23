@@ -40,6 +40,16 @@ jobs:
         with:
             xcode-version: "16.0.0"
 
+      - name: Download iOS 16.5 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ios-sdk"
+          curl -fL --retry 3 "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" -o "$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz"
+          tar -xJf "$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz" -C "$RUNNER_TEMP/ios-sdk"
+          echo "IOS_SDKROOT=$RUNNER_TEMP/ios-sdk/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
+          rm "$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz"
+
       - name: build
         id: build
         run: bash build.sh ${{ matrix.arch }}
