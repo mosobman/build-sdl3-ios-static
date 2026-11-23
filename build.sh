@@ -92,6 +92,7 @@ git_clone clay            "https://github.com/nicbarker/clay"             main |
 echo Applying patches
 git -C "$SOURCE/SDL" apply --check -p1 "$SCRIPT_DIR/patches/SDL_uikitdialog.patch"
 git -C "$SOURCE/SDL" apply -p1 "$SCRIPT_DIR/patches/SDL_uikitdialog.patch"
+git -C "$SOURCE/SDL" apply -p1 "$SCRIPT_DIR/patches/SDL_uikitvideo.patch"
 #git -C "$SOURCE/SDL_mixer" apply -p1 "$SCRIPT_DIR/patches/SDL_mixer.patch"
 git -C "$SOURCE/SDL_ttf" apply -p1 "$SCRIPT_DIR/patches/SDL_ttf.patch"
 echo Applied patches

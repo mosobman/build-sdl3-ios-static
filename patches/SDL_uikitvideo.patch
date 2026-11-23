@@ -1,0 +1,9 @@
+diff --git a/src/video/uikit/SDL_uikitvideo.m b/src/video/uikit/SDL_uikitvideo.m
+--- a/src/video/uikit/SDL_uikitvideo.m
++++ b/src/video/uikit/SDL_uikitvideo.m
+@@ -479,3 +479,5 @@
++#if defined(SDL_PLATFORM_VISIONOS)
+     case UIUserInterfaceIdiomVision:
+         return SDL_FORMFACTOR_HEADSET;
++#endif
+     default:
