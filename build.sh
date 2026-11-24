@@ -5,15 +5,20 @@ TARGET_PLATFORM="$1"
 
 SCRIPT_DIR="$(realpath "$(dirname "$0")")"
 
-OUTPUT="$SCRIPT_DIR/SDL3-${TARGET_PLATFORM}"
+OUTPUT="$SCRIPT_DIR/artifacts"
 SOURCE="$SCRIPT_DIR/sources"
 BUILD="$SCRIPT_DIR/builds"
+SDL_OUTPUT="$OUTPUT/SDL3"
+FFMPEG_OUTPUT="$OUTPUT/FFmpeg"
+IMGUI_OUTPUT="$OUTPUT/ImGui"
+CLAY_OUTPUT="$OUTPUT/Clay"
 rm -rf "$OUTPUT"
 rm -rf "$SOURCE"
 rm -rf "$BUILD"
 mkdir -p "$OUTPUT" || { echo "cannot create output path" >&2; exit 1; }
 mkdir -p "$SOURCE" || { echo "cannot create source path" >&2; exit 1; }
 mkdir -p "$BUILD"  || { echo "cannot create build path"  >&2; exit 1; }
+mkdir -p "$SDL_OUTPUT" "$FFMPEG_OUTPUT" "$IMGUI_OUTPUT" "$CLAY_OUTPUT"
 echo "OUTPUT: $OUTPUT"
 echo "SOURCE: $SOURCE"
 echo "BUILD: $BUILD"
@@ -46,9 +51,16 @@ git_clone() {
 command -v git >/dev/null   || { echo "git not found"   >&2; exit 1; }
 command -v cmake >/dev/null || { echo "cmake not found" >&2; exit 1; }
 command -v make >/dev/null  || { echo "make not found"  >&2; exit 1; }
+command -v zip >/dev/null   || { echo "zip not found"   >&2; exit 1; }
 command -v xcrun >/dev/null || { echo "xcrun not found" >&2; exit 1; }
 
 SDK="${IOS_SDKROOT:-$(xcrun --sdk iphoneos --show-sdk-path)}"
+IOS_SDK_VERSION="${IOS_SDK_VERSION:-}"
+if [ -z "$IOS_SDK_VERSION" ]; then
+    SDK_SETTINGS="$SDK/SDKSettings.plist"
+    [ -f "$SDK_SETTINGS" ] || { echo "SDKSettings.plist not found: $SDK_SETTINGS (set IOS_SDK_VERSION explicitly)" >&2; exit 1; }
+    IOS_SDK_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :Version' "$SDK_SETTINGS")"
+fi
 CC="$(xcrun --sdk iphoneos --find clang)"
 CXX="$(xcrun --sdk iphoneos --find clang++)"
 OBJCC="$(xcrun --sdk iphoneos --find clang)"
@@ -57,11 +69,13 @@ CLANG_VER="$($CC --version)"
 
 IOS_DEPLOYMENT_TARGET="${IOS_DEPLOYMENT_TARGET:-15.0}"
 IOS_ARCH="${IOS_ARCH:-arm64}"
+OUTPUT_DATE="${OUTPUT_DATE:-$(date -u +"%Y-%m-%d")}"
 
-mkdir -p "$OUTPUT/compiler-rt"
-cp -a "$(clang -print-resource-dir)/lib/darwin/libclang_rt.ios.a" "$OUTPUT/compiler-rt/"
+mkdir -p "$SDL_OUTPUT/compiler-rt"
+cp -a "$(clang -print-resource-dir)/lib/darwin/libclang_rt.ios.a" "$SDL_OUTPUT/compiler-rt/"
 
 echo "SDK: $SDK"
+echo "SDK version: $IOS_SDK_VERSION"
 echo "Architecture: $IOS_ARCH"
 echo "Deployment target: $IOS_DEPLOYMENT_TARGET"
 echo "Compiler Version: $CLANG_VER"
@@ -133,11 +147,11 @@ CMAKE_COMMON_ARGS=(
   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 
-  -DSDL3_ROOT="$OUTPUT"
-  -DSDL3_DIR="$OUTPUT/lib/cmake/SDL3"
+  -DSDL3_ROOT="$SDL_OUTPUT"
+  -DSDL3_DIR="$SDL_OUTPUT/lib/cmake/SDL3"
 
-  -DCMAKE_INSTALL_PREFIX="$OUTPUT"
-  -DCMAKE_PREFIX_PATH="$OUTPUT"
+  -DCMAKE_INSTALL_PREFIX="$SDL_OUTPUT"
+  -DCMAKE_PREFIX_PATH="$SDL_OUTPUT"
 
   -DMAIN_EXECUTABLE=OFF
 )
@@ -282,7 +296,7 @@ cmake \
 (
 	cd "$SOURCE/FFmpeg"
 	./configure \
-		--prefix="$OUTPUT" \
+		--prefix="$FFMPEG_OUTPUT" \
 		--target-os=darwin \
 		--arch="$IOS_ARCH" \
 		--enable-cross-compile \
@@ -312,7 +326,7 @@ cmake \
 )
 
 for library in libavcodec.a libavformat.a libavutil.a libswresample.a; do
-	[[ -f "$OUTPUT/lib/$library" ]] || { echo "FFmpeg library not found: $OUTPUT/lib/$library" >&2; exit 1; }
+	[[ -f "$FFMPEG_OUTPUT/lib/$library" ]] || { echo "FFmpeg library not found: $FFMPEG_OUTPUT/lib/$library" >&2; exit 1; }
 done
 
 for header in \
@@ -320,7 +334,7 @@ for header in \
 	include/libavformat/avformat.h \
 	include/libavutil/avutil.h \
 	include/libswresample/swresample.h; do
-	[[ -f "$OUTPUT/$header" ]] || { echo "FFmpeg header not found: $OUTPUT/$header" >&2; exit 1; }
+	[[ -f "$FFMPEG_OUTPUT/$header" ]] || { echo "FFmpeg header not found: $FFMPEG_OUTPUT/$header" >&2; exit 1; }
 done
 
 #
@@ -328,7 +342,7 @@ done
 #
 
 mkdir -p "$BUILD/imgui"
-mkdir -p "$OUTPUT/include/imgui"
+mkdir -p "$IMGUI_OUTPUT/include/imgui" "$IMGUI_OUTPUT/lib"
 cp \
 	"$SOURCE/imgui/imgui.h" \
 	"$SOURCE/imgui/imconfig.h" \
@@ -338,7 +352,7 @@ cp \
 	"$SOURCE/imgui/imstb_truetype.h" \
 	"$SOURCE/imgui/backends/imgui_impl_sdl3.h" \
 	"$SOURCE/imgui/backends/imgui_impl_sdlgpu3.h" \
-	"$OUTPUT/include/imgui/"
+	"$IMGUI_OUTPUT/include/imgui/"
 
 IMGUI_CXX_FLAGS=(
 	-std=c++11
@@ -352,7 +366,7 @@ IMGUI_CXX_FLAGS=(
 
 	-I"$SOURCE/imgui"
 	-I"$SOURCE/imgui/backends"
-	-I"$OUTPUT/include"
+	-I"$SDL_OUTPUT/include"
 )
 
 IMGUI_SOURCES=(
@@ -376,20 +390,20 @@ for source in "${IMGUI_SOURCES[@]}"; do
 		-o "$BUILD/imgui/$name.o"
 done
 
-libtool -static -o "$OUTPUT/lib/libimgui.a" "$BUILD/imgui"/*.o
+libtool -static -o "$IMGUI_OUTPUT/lib/libimgui.a" "$BUILD/imgui"/*.o
 
 #
 # Clay
 #
 
 mkdir -p "$BUILD/clay"
-mkdir -p "$OUTPUT/include/clay"
+mkdir -p "$CLAY_OUTPUT/include/clay" "$CLAY_OUTPUT/lib"
 cat > "$BUILD/clay/clay.c" <<'EOF'
 #define CLAY_IMPLEMENTATION
 #include "clay.h"
 EOF
 
-cp "$SOURCE/clay/clay.h" "$OUTPUT/include/clay/"
+cp "$SOURCE/clay/clay.h" "$CLAY_OUTPUT/include/clay/"
 
 CLAY_C_FLAGS=(
     -std=c99
@@ -409,7 +423,7 @@ CLAY_C_FLAGS=(
     -c "$BUILD/clay/clay.c" \
     -o "$BUILD/clay/clay.o"
 
-libtool -static -o "$OUTPUT/lib/libclay.a" "$BUILD/clay/clay.o"
+libtool -static -o "$CLAY_OUTPUT/lib/libclay.a" "$BUILD/clay/clay.o"
 
 : '
 rem
@@ -563,39 +577,32 @@ CLAY_COMMIT="$(git -C "$SOURCE/clay" rev-parse HEAD)"
     printf "SDL_image       %s\n" "$SDL_IMAGE_COMMIT"
     printf "SDL_mixer       %s\n" "$SDL_MIXER_COMMIT"
     printf "SDL_ttf         %s\n" "$SDL_TTF_COMMIT"
-    printf "FFmpeg          %s\n" "$FFMPEG_COMMIT"
-    printf "ImGui           %s\n" "$IMGUI_COMMIT"
-    printf "Clay            %s\n" "$CLAY_COMMIT"
-    #printf "SDL_rtf         %s\n" "$SDL_RTF_COMMIT"
-    #printf "SDL_net         %s\n" "$SDL_NET_COMMIT"
-    #printf "SDL_sound       %s\n" "$SDL_SOUND_COMMIT"
-    #printf "SDL_shadercross %s\n" "$SDL_SHADERCROSS_COMMIT"
-    #printf "SDL2_compat     %s\n" "$SDL2_COMPAT_COMMIT"
-} > "$OUTPUT/commits.txt"
+} > "$SDL_OUTPUT/commits.txt"
+printf "FFmpeg          %s\n" "$FFMPEG_COMMIT" > "$FFMPEG_OUTPUT/commits.txt"
+printf "ImGui           %s\n" "$IMGUI_COMMIT" > "$IMGUI_OUTPUT/commits.txt"
+printf "Clay            %s\n" "$CLAY_COMMIT" > "$CLAY_OUTPUT/commits.txt"
+
+SDL3_ZIP="SDL3-$TARGET_PLATFORM-$IOS_DEPLOYMENT_TARGET-SDK-$IOS_SDK_VERSION-$OUTPUT_DATE.zip"
+FFMPEG_ZIP="FFmpeg-$TARGET_PLATFORM-$IOS_DEPLOYMENT_TARGET-SDK-$IOS_SDK_VERSION-$OUTPUT_DATE.zip"
+IMGUI_ZIP="ImGui-$TARGET_PLATFORM-$IOS_DEPLOYMENT_TARGET-SDK-$IOS_SDK_VERSION-$OUTPUT_DATE.zip"
+CLAY_ZIP="Clay-$TARGET_PLATFORM-$IOS_DEPLOYMENT_TARGET-SDK-$IOS_SDK_VERSION-$OUTPUT_DATE.zip"
 
 echo "Coalescing libraries"
-libtool -static -o "$OUTPUT/libSDL3_monolithic.a" "$OUTPUT/lib"/*.a "$OUTPUT/compiler-rt/libclang_rt.ios.a"
+libtool -static -o "$SDL_OUTPUT/libSDL3_monolithic.a" "$SDL_OUTPUT/lib"/*.a "$SDL_OUTPUT/compiler-rt/libclang_rt.ios.a"
 echo "Coalesced libraries"
 
 #
 # GitHub Actions
 #
 
-if [ -n "$GITHUB_WORKFLOW" ]; then
-	OUTPUT_DATE=$(date +"%Y-%m-%d")
-
-    rm -f "$OUTPUT/bin/sdl2-config" 2>/dev/null
-    rm -f "$OUTPUT"/lib/libSDL3_test.* "$OUTPUT"/lib/libSDL2_test.* "$OUTPUT/lib/SDL2main.pdb" 2>/dev/null
-    rm -f "$OUTPUT"/include/SDL3/SDL_test*.h "$OUTPUT"/include/SDL2/SDL_test*.h 2>/dev/null
-
-    rm -rf "$OUTPUT/cmake" "$OUTPUT/lib/pkgconfig" "$OUTPUT/licenses" "$OUTPUT/share" "$OUTPUT/optional" 2>/dev/null
-
-    echo "Creating SDL3-$TARGET_PLATFORM-$OUTPUT_DATE.zip"
-
-    tar -cavf "SDL3-$TARGET_PLATFORM-$OUTPUT_DATE.zip" "SDL3-$TARGET_PLATFORM" || return 1
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    rm -f "$SDL_OUTPUT/bin/sdl2-config" 2>/dev/null
+    rm -f "$SDL_OUTPUT"/lib/libSDL3_test.* "$SDL_OUTPUT"/lib/libSDL2_test.* "$SDL_OUTPUT/lib/SDL2main.pdb" 2>/dev/null
+    rm -f "$SDL_OUTPUT"/include/SDL3/SDL_test*.h "$SDL_OUTPUT"/include/SDL2/SDL_test*.h 2>/dev/null
 
     {
         echo "OUTPUT_DATE=$OUTPUT_DATE"
+        echo "IOS_SDK_VERSION=$IOS_SDK_VERSION"
         echo "SDL_COMMIT=$SDL_COMMIT"
         echo "SDL_IMAGE_COMMIT=$SDL_IMAGE_COMMIT"
         echo "SDL_MIXER_COMMIT=$SDL_MIXER_COMMIT"
@@ -603,6 +610,10 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
         echo "FFMPEG_COMMIT=$FFMPEG_COMMIT"
         echo "IMGUI_COMMIT=$IMGUI_COMMIT"
         echo "CLAY_COMMIT=$CLAY_COMMIT"
+        echo "SDL3_ZIP=$SDL3_ZIP"
+        echo "FFMPEG_ZIP=$FFMPEG_ZIP"
+        echo "IMGUI_ZIP=$IMGUI_ZIP"
+        echo "CLAY_ZIP=$CLAY_ZIP"
         #echo "SDL_RTF_COMMIT=$SDL_RTF_COMMIT"
         #echo "SDL_NET_COMMIT=$SDL_NET_COMMIT"
         #echo "SDL_SOUND_COMMIT=$SDL_SOUND_COMMIT"
@@ -611,6 +622,15 @@ if [ -n "$GITHUB_WORKFLOW" ]; then
     } >> "$GITHUB_OUTPUT"
 
 fi
+
+echo "Creating $SDL3_ZIP"
+(cd "$OUTPUT" && zip -qr "$SDL3_ZIP" SDL3)
+echo "Creating $FFMPEG_ZIP"
+(cd "$OUTPUT" && zip -qr "$FFMPEG_ZIP" FFmpeg)
+echo "Creating $IMGUI_ZIP"
+(cd "$OUTPUT" && zip -qr "$IMGUI_ZIP" ImGui)
+echo "Creating $CLAY_ZIP"
+(cd "$OUTPUT" && zip -qr "$CLAY_ZIP" Clay)
 
 #
 # done!

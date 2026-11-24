@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-15
     strategy:
       matrix:
-        arch: [iOS]
+        platform: [iOS]
 
     outputs:
       OUTPUT_DATE:            ${{ steps.build.outputs.OUTPUT_DATE }}
@@ -49,17 +49,18 @@ jobs:
           curl -fL --retry 3 "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" -o "$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz"
           tar -xJf "$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz" -C "$RUNNER_TEMP/ios-sdk"
           echo "IOS_SDKROOT=$RUNNER_TEMP/ios-sdk/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
+          echo "IOS_SDK_VERSION=16.5" >> "$GITHUB_ENV"
           rm "$RUNNER_TEMP/iPhoneOS16.5.sdk.tar.xz"
 
       - name: build
         id: build
-        run: bash build.sh ${{ matrix.arch }}
+        run: bash build.sh ${{ matrix.platform }}
 
       - name: upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: SDL3-${{ matrix.arch }}-${{ steps.build.outputs.OUTPUT_DATE }}
-          path: SDL3-${{ matrix.arch }}-${{ steps.build.outputs.OUTPUT_DATE }}.zip
+          name: libraries-${{ matrix.platform }}-${{ steps.build.outputs.OUTPUT_DATE }}
+          path: artifacts/*.zip
           if-no-files-found: error
           compression-level: 0
 
@@ -96,8 +97,8 @@ jobs:
       - name: get artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: SDL3-*-${{ needs.build.outputs.OUTPUT_DATE }}
+          pattern: libraries-*-${{ needs.build.outputs.OUTPUT_DATE }}
           merge-multiple: true
 
       - name: upload artifacts
-        run: gh release upload '${{ needs.build.outputs.OUTPUT_DATE }}' SDL3-*-${{ needs.build.outputs.OUTPUT_DATE }}.zip -R "${GITHUB_REPOSITORY}" --clobber
+        run: gh release upload '${{ needs.build.outputs.OUTPUT_DATE }}' *.zip -R "${GITHUB_REPOSITORY}" --clobber

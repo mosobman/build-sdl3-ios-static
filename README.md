@@ -1,8 +1,13 @@
+
+# Build Monolithic Libraries
+
 [![build-sdl3-ios-static](https://github.com/mosobman/build-sdl3-ios-static/actions/workflows/build-sdl3-ios-static.yml/badge.svg)](https://github.com/mosobman/build-sdl3-ios-static/actions/workflows/build-sdl3-ios-static.yml)
 
 Automatic weekly build of [SDL3][] and its helper libraries, [FFmpeg][], [Dear ImGui][], and [Clay][] for iOS 15.0 (arm64).
 
-Build produces static libraries (.a files) as well as their statically linked dependencies. FFmpeg is built from its `release/9.0` branch as static libraries, limited to `libavcodec`, `libavformat`, `libavutil`, and `libswresample`; the built-in codecs and formats are retained, the public headers are installed under `include/`, and all four libraries are included in `libSDL3_monolithic.a`.
+Build produces four separate static-library packages: SDL3 and its helper libraries (including `libSDL3_monolithic.a`), FFmpeg, ImGui, and Clay. Each ZIP contains that package's headers and static libraries. FFmpeg is built from its `release/9.0` branch with `libavcodec`, `libavformat`, `libavutil`, and `libswresample`; the built-in codecs and formats are retained.
+
+Release asset names use `LIBRARY-iOS-ios_target-SDK-sdk_version-YYYY-MM-DD.zip`, for example `FFmpeg-iOS-15.0-SDK-16.5-2026-11-24.zip`. Local builds place the ZIPs in `artifacts/`.
 
 Download binary build as zip archive from [latest release][] page.
 
